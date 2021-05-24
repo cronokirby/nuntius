@@ -38,13 +38,13 @@ func (db *clientDatabase) setup() error {
 	return nil
 }
 
-func (db *clientDatabase) hasIdentity() (bool, error) {
-	var count int
-	err := db.db.QueryRow("SELECT COUNT(*) FROM identity;").Scan(&count)
+func (db *clientDatabase) getIdentity() (ed25519.PublicKey, error) {
+	var pub ed25519.PublicKey
+	err := db.db.QueryRow("SELECT public FROM identity LIMIT 1;").Scan(&pub)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return count > 0, nil
+	return pub, nil
 }
 
 func (db *clientDatabase) saveIdentity(pub ed25519.PublicKey, priv ed25519.PrivateKey) error {
@@ -74,11 +74,6 @@ func (cmd *GenerateCommand) Run() error {
 	if err != nil {
 		return err
 	}
-	hasIdentity, err := db.hasIdentity()
-	if err != nil {
-		return err
-	}
-	fmt.Println(hasIdentity)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		return fmt.Errorf("couldn't generate identity pair: %w", err)
@@ -91,8 +86,30 @@ func (cmd *GenerateCommand) Run() error {
 	return nil
 }
 
+type IdentityCommand struct {
+}
+
+func (cmd *IdentityCommand) Run() error {
+	db, err := newClientDatabase()
+	if err != nil {
+		return fmt.Errorf("couldn't connect to database: %w", err)
+	}
+	err = db.setup()
+	if err != nil {
+		return err
+	}
+
+	pub, err := db.getIdentity()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("nuntiusの公開鍵%s\n", hex.EncodeToString(pub))
+	return nil
+}
+
 var cli struct {
 	Generate GenerateCommand `cmd help:"Generate a new identity pair."`
+	Identity IdentityCommand `cmd help:"Fetch the current identity."`
 }
 
 func main() {
