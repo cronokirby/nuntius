@@ -6,8 +6,8 @@ import (
 
 	"encoding/hex"
 	"fmt"
-	"os"
 
+	"github.com/alecthomas/kong"
 	_ "modernc.org/sqlite"
 )
 
@@ -61,7 +61,11 @@ func (db *clientDatabase) saveIdentity(pub ed25519.PublicKey, priv ed25519.Priva
 	return nil
 }
 
-func commandGenerateIdentity() error {
+type GenerateCommand struct {
+	Force bool `help:"Overwrite existing identity"`
+}
+
+func (cmd *GenerateCommand) Run() error {
 	db, err := newClientDatabase()
 	if err != nil {
 		return fmt.Errorf("couldn't connect to database: %w", err)
@@ -87,10 +91,12 @@ func commandGenerateIdentity() error {
 	return nil
 }
 
+var cli struct {
+	Generate GenerateCommand `cmd help:"Generate a new identity pair."`
+}
+
 func main() {
-	err := commandGenerateIdentity()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %+v\n", err)
-		os.Exit(1)
-	}
+	ctx := kong.Parse(&cli)
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
 }
