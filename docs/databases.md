@@ -5,7 +5,7 @@ and to testify to their identity. In practice, this is an Ed25519 key.
 
 ```
 CREATE TABLE identity (
-  public BLOB PRIMARY KEY,
-  private BLOB
+  public BLOB PRIMARY KEY NOT NULL,
+  private BLOB NOT NULL
 );
 ```
