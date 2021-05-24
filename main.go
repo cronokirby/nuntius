@@ -3,6 +3,9 @@ package main
 import (
 	"crypto/ed25519"
 	"database/sql"
+	"os"
+	"os/user"
+	"path"
 
 	"encoding/hex"
 	"fmt"
@@ -11,14 +14,22 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const CLIENT_DATABASE = "./client.db"
+const CLIENT_DATABASE = ".nuntius/client.db"
 
 type clientDatabase struct {
 	db *sql.DB
 }
 
-func newClientDatabase() (*clientDatabase, error) {
-	db, err := sql.Open("sqlite", CLIENT_DATABASE)
+func newClientDatabase(database string) (*clientDatabase, error) {
+	if database == "" {
+		usr, err := user.Current()
+		if err != nil {
+			return nil, err
+		}
+		database = path.Join(usr.HomeDir, CLIENT_DATABASE)
+	}
+	os.MkdirAll(path.Dir(database), os.ModePerm)
+	db, err := sql.Open("sqlite", database)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +79,8 @@ type GenerateCommand struct {
 	Force bool `help:"Overwrite existing identity"`
 }
 
-func (cmd *GenerateCommand) Run() error {
-	db, err := newClientDatabase()
+func (cmd *GenerateCommand) Run(database string) error {
+	db, err := newClientDatabase(database)
 	if err != nil {
 		return fmt.Errorf("couldn't connect to database: %w", err)
 	}
@@ -102,8 +113,8 @@ func (cmd *GenerateCommand) Run() error {
 type IdentityCommand struct {
 }
 
-func (cmd *IdentityCommand) Run() error {
-	db, err := newClientDatabase()
+func (cmd *IdentityCommand) Run(database string) error {
+	db, err := newClientDatabase(database)
 	if err != nil {
 		return fmt.Errorf("couldn't connect to database: %w", err)
 	}
@@ -126,12 +137,14 @@ func (cmd *IdentityCommand) Run() error {
 }
 
 var cli struct {
+	Database string `optional name:"database" help:"Path to local database." type:"path"`
+
 	Generate GenerateCommand `cmd help:"Generate a new identity pair."`
 	Identity IdentityCommand `cmd help:"Fetch the current identity."`
 }
 
 func main() {
 	ctx := kong.Parse(&cli)
-	err := ctx.Run()
+	err := ctx.Run(cli.Database)
 	ctx.FatalIfErrorf(err)
 }
