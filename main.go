@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/alecthomas/kong"
@@ -24,7 +23,7 @@ func (cmd *GenerateCommand) Run(database string) error {
 	}
 	if existingPub != nil && !cmd.Force {
 		fmt.Println("An existing identity exists:")
-		fmt.Printf("nuntiusの公開鍵%s\n\n", hex.EncodeToString(existingPub))
+		fmt.Println(existingPub.String())
 		fmt.Println("Use `--force` if you want to overwrite this identity.")
 		return nil
 	}
@@ -36,7 +35,7 @@ func (cmd *GenerateCommand) Run(database string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("nuntiusの公開鍵%s\n", hex.EncodeToString(pub))
+	fmt.Println(pub.String())
 	return nil
 }
 
@@ -58,7 +57,7 @@ func (cmd *IdentityCommand) Run(database string) error {
 		fmt.Println("You can use `nuntius generate` to generate an identity.")
 		return nil
 	}
-	fmt.Printf("nuntiusの公開鍵%s\n", hex.EncodeToString(pub))
+	fmt.Println(pub.String())
 	return nil
 }
 
