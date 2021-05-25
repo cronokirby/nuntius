@@ -8,10 +8,22 @@ import (
 	"path"
 )
 
+// IdentityPub represents the public part of an identity key.
+//
+// This is used to uniquely identity a given user as well.
 type IdentityPub ed25519.PublicKey
 
+// IdentityPriv represents the private part of an identity key.
+//
+// This should be kept secret. Leaking this key would allow
+// anyone else to impersonate the user with this identity.
 type IdentityPriv ed25519.PrivateKey
 
+// GenerateIdentity creates a new identity key-pair.
+//
+// This generates a new key, using a secure source of randomness.
+//
+// An error may be returned if generation fails.
 func GenerateIdentity() (IdentityPub, IdentityPriv, error) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
@@ -20,17 +32,29 @@ func GenerateIdentity() (IdentityPub, IdentityPriv, error) {
 	return IdentityPub(pub), IdentityPriv(priv), nil
 }
 
+// ClientStore represents a store for information local to the client application.
+//
+// This allows us to store things like a user's personal private keys,
+// and other information that's useful for the application.
 type ClientStore interface {
+	// GetIdentity returns the user's current identity, if any, or an error
 	GetIdentity() (IdentityPub, error)
+	// SaveIdentity saves an identity key-pair, replacing any existing identity
 	SaveIdentity(IdentityPub, IdentityPriv) error
 }
 
+// This will be the path after the Home directory where we put our SQLite database.
 const _DEFAULT_DATABASE_PATH = ".nuntius/client.db"
 
+// clientDatabase is used to implement ClientStore over an SQLite database
 type clientDatabase struct {
 	*sql.DB
 }
 
+// newClientDatabase creates a clientDatabase, given a path to an SQLite database
+//
+// If this path is empty, a default path is used instead, based on the
+// current Home directory.
 func newClientDatabase(database string) (*clientDatabase, error) {
 	if database == "" {
 		usr, err := user.Current()
@@ -82,6 +106,12 @@ func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) er
 	return nil
 }
 
+// NewStore creates a new ClientStore given a path to a local database.
+//
+// This will create the database file as necessary.
+//
+// If this string is empty, a default database, placed in the user's Home directory,
+// is used instead.
 func NewStore(database string) (ClientStore, error) {
 	db, err := newClientDatabase(database)
 	if err != nil {
