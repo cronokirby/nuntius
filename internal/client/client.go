@@ -3,15 +3,42 @@ package client
 import (
 	"crypto/ed25519"
 	"database/sql"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"os"
 	"os/user"
 	"path"
+	"strings"
 )
 
 // IdentityPub represents the public part of an identity key.
 //
 // This is used to uniquely identity a given user as well.
 type IdentityPub ed25519.PublicKey
+
+const _IDENTITY_PUB_HEADER = "nuntiusの公開鍵"
+
+// String returns the string representation of an identity
+func (pub IdentityPub) String() string {
+	return fmt.Sprintf("%s%s", _IDENTITY_PUB_HEADER, hex.EncodeToString(pub))
+}
+
+// IdentityPubFromString attempts to parse an identity from a string, potentially failing
+func IdentityPubFromString(s string) (IdentityPub, error) {
+	if !strings.HasPrefix(s, _IDENTITY_PUB_HEADER) {
+		return nil, errors.New("identity has incorrect header")
+	}
+	hexString := strings.TrimPrefix(s, _IDENTITY_PUB_HEADER)
+	bytes, err := hex.DecodeString(hexString)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("decoded identity has incorrect length: %d", len(bytes))
+	}
+	return IdentityPub(bytes), nil
+}
 
 // IdentityPriv represents the private part of an identity key.
 //
@@ -41,8 +68,8 @@ type ClientStore interface {
 	GetIdentity() (IdentityPub, error)
 	// SaveIdentity saves an identity key-pair, replacing any existing identity
 	SaveIdentity(IdentityPub, IdentityPriv) error
-	// RegisterFriend registers a friend by identity, and name
-	RegisterFriend(IdentityPub, string) error
+	// AddFriend registers a friend by identity, and name
+	AddFriend(IdentityPub, string) error
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -74,6 +101,11 @@ func newClientDatabase(database string) (*clientDatabase, error) {
 	CREATE TABLE IF NOT EXISTS identity (
 		public BLOB PRIMARY KEY NOT NULL,
   	private BLOB NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS friend (
+ 		public BLOB PRIMARY KEY NOT NULL,
+  	name TEXT NOT NULL
 	);
 	`)
 	if err != nil {
@@ -108,11 +140,10 @@ func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) er
 	return nil
 }
 
-func (store *clientDatabase) RegisterFriend(pub IdentityPub, name string) error {
+func (store *clientDatabase) AddFriend(pub IdentityPub, name string) error {
 	_, err := store.Exec(`
-	INSERT INTO friend (public, name)
-	VALUES ($1, $2)
-	ON CONFLICT DO UPDATE;
+	INSERT OR REPLACE INTO friend (public, name)
+	VALUES ($1, $2);
 	`, pub, name)
 	return err
 }

@@ -14,7 +14,7 @@ The friend table stores names for known identity keys.
 
 ```
 CREATE TABLE friend (
-  public BLOB PRIMARY KEY NOT NULL
+  public BLOB PRIMARY KEY NOT NULL,
   name TEXT NOT NULL
 );
 ```

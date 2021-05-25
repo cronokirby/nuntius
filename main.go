@@ -62,11 +62,31 @@ func (cmd *IdentityCommand) Run(database string) error {
 	return nil
 }
 
+type AddFriendCommand struct {
+	Name string `arg help:"The name of the friend"`
+	Pub  string `arg help:"Their public identity key"`
+}
+
+func (cmd *AddFriendCommand) Run(database string) error {
+	pub, err := client.IdentityPubFromString(cmd.Pub)
+	if err != nil {
+		return err
+	}
+
+	store, err := client.NewStore(database)
+	if err != nil {
+		return fmt.Errorf("couldn't connect to database: %w", err)
+	}
+
+	return store.AddFriend(pub, cmd.Name)
+}
+
 var cli struct {
 	Database string `optional name:"database" help:"Path to local database." type:"path"`
 
-	Generate GenerateCommand `cmd help:"Generate a new identity pair."`
-	Identity IdentityCommand `cmd help:"Fetch the current identity."`
+	Generate  GenerateCommand  `cmd help:"Generate a new identity pair."`
+	Identity  IdentityCommand  `cmd help:"Fetch the current identity."`
+	AddFriend AddFriendCommand `cmd help:"Add a new friend"`
 }
 
 func main() {
