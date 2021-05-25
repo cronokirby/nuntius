@@ -99,8 +99,9 @@ func newClientDatabase(database string) (*clientDatabase, error) {
 	}
 	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS identity (
-		public BLOB PRIMARY KEY NOT NULL,
-  	private BLOB NOT NULL
+		id BOOLEAN PRIMARY KEY CONSTRAINT one_row CHECK (id) NOT NULL,
+		public BLOB NOT NULL,
+		private BLOB NOT NULL
 	);
 
 	CREATE TABLE IF NOT EXISTS friend (
@@ -127,12 +128,8 @@ func (store *clientDatabase) GetIdentity() (IdentityPub, error) {
 }
 
 func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) error {
-	_, err := store.Exec("DELETE FROM identity;")
-	if err != nil {
-		return err
-	}
-	_, err = store.Exec(`
-	INSERT INTO identity (public, private) VALUES ($1, $2);
+	_, err := store.Exec(`
+	INSERT OR REPLACE INTO identity (id, public, private) VALUES (true, $1, $2);
 	`, pub, priv)
 	if err != nil {
 		return err
