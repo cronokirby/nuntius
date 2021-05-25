@@ -41,6 +41,8 @@ type ClientStore interface {
 	GetIdentity() (IdentityPub, error)
 	// SaveIdentity saves an identity key-pair, replacing any existing identity
 	SaveIdentity(IdentityPub, IdentityPriv) error
+	// RegisterFriend registers a friend by identity, and name
+	RegisterFriend(IdentityPub, string) error
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -104,6 +106,15 @@ func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) er
 		return err
 	}
 	return nil
+}
+
+func (store *clientDatabase) RegisterFriend(pub IdentityPub, name string) error {
+	_, err := store.Exec(`
+	INSERT INTO friend (public, name)
+	VALUES ($1, $2)
+	ON CONFLICT DO UPDATE;
+	`, pub, name)
+	return err
 }
 
 // NewStore creates a new ClientStore given a path to a local database.
