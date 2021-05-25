@@ -1,94 +1,24 @@
 package main
 
 import (
-	"crypto/ed25519"
-	"database/sql"
-	"os"
-	"os/user"
-	"path"
-
 	"encoding/hex"
 	"fmt"
 
 	"github.com/alecthomas/kong"
+	"github.com/cronokirby/nuntius/internal/client"
 	_ "modernc.org/sqlite"
 )
-
-const CLIENT_DATABASE = ".nuntius/client.db"
-
-type clientDatabase struct {
-	db *sql.DB
-}
-
-func newClientDatabase(database string) (*clientDatabase, error) {
-	if database == "" {
-		usr, err := user.Current()
-		if err != nil {
-			return nil, err
-		}
-		database = path.Join(usr.HomeDir, CLIENT_DATABASE)
-	}
-	os.MkdirAll(path.Dir(database), os.ModePerm)
-	db, err := sql.Open("sqlite", database)
-	if err != nil {
-		return nil, err
-	}
-	return &clientDatabase{db}, nil
-}
-
-func (db *clientDatabase) setup() error {
-	_, err := db.db.Exec(`
-	CREATE TABLE IF NOT EXISTS identity (
-		public BLOB PRIMARY KEY NOT NULL,
-  	private BLOB NOT NULL
-	);
-	`)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (db *clientDatabase) getIdentity() (ed25519.PublicKey, error) {
-	var pub ed25519.PublicKey
-	err := db.db.QueryRow("SELECT public FROM identity LIMIT 1;").Scan(&pub)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return pub, nil
-}
-
-func (db *clientDatabase) saveIdentity(pub ed25519.PublicKey, priv ed25519.PrivateKey) error {
-	_, err := db.db.Exec("DELETE FROM identity;")
-	if err != nil {
-		return err
-	}
-	_, err = db.db.Exec(`
-	INSERT INTO identity (public, private) VALUES ($1, $2);
-	`, pub, priv)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 type GenerateCommand struct {
 	Force bool `help:"Overwrite existing identity"`
 }
 
 func (cmd *GenerateCommand) Run(database string) error {
-	db, err := newClientDatabase(database)
+	store, err := client.NewStore(database)
 	if err != nil {
-		return fmt.Errorf("couldn't connect to database: %w", err)
+		return fmt.Errorf("couldn't open database: %w", err)
 	}
-	err = db.setup()
-	if err != nil {
-		return err
-	}
-	existingPub, err := db.getIdentity()
+	existingPub, err := store.GetIdentity()
 	if err != nil {
 		return err
 	}
@@ -98,11 +28,11 @@ func (cmd *GenerateCommand) Run(database string) error {
 		fmt.Println("Use `--force` if you want to overwrite this identity.")
 		return nil
 	}
-	pub, priv, err := ed25519.GenerateKey(nil)
+	pub, priv, err := client.GenerateIdentity()
 	if err != nil {
 		return fmt.Errorf("couldn't generate identity pair: %w", err)
 	}
-	err = db.saveIdentity(pub, priv)
+	err = store.SaveIdentity(pub, priv)
 	if err != nil {
 		return err
 	}
@@ -114,16 +44,12 @@ type IdentityCommand struct {
 }
 
 func (cmd *IdentityCommand) Run(database string) error {
-	db, err := newClientDatabase(database)
+	store, err := client.NewStore(database)
 	if err != nil {
 		return fmt.Errorf("couldn't connect to database: %w", err)
 	}
-	err = db.setup()
-	if err != nil {
-		return err
-	}
 
-	pub, err := db.getIdentity()
+	pub, err := store.GetIdentity()
 	if err != nil {
 		return err
 	}
