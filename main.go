@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/cronokirby/nuntius/internal/client"
+	"github.com/cronokirby/nuntius/internal/server"
 	_ "modernc.org/sqlite"
 )
 
@@ -85,7 +86,8 @@ type ServerCommand struct {
 }
 
 func (cmd *ServerCommand) Run(database string) error {
-	fmt.Println("Port:", cmd.Port)
+	fmt.Println("Listening on port", cmd.Port)
+	server.Run(cmd.Port)
 	return nil
 }
 
