@@ -80,12 +80,22 @@ func (cmd *AddFriendCommand) Run(database string) error {
 	return store.AddFriend(pub, cmd.Name)
 }
 
+type ServerCommand struct {
+	Port int `arg help:"The port to use" default:"1234"`
+}
+
+func (cmd *ServerCommand) Run(database string) error {
+	fmt.Println("Port:", cmd.Port)
+	return nil
+}
+
 var cli struct {
 	Database string `optional name:"database" help:"Path to local database." type:"path"`
 
 	Generate  GenerateCommand  `cmd help:"Generate a new identity pair."`
 	Identity  IdentityCommand  `cmd help:"Fetch the current identity."`
 	AddFriend AddFriendCommand `cmd help:"Add a new friend"`
+	Server    ServerCommand    `cmd help:"Start a server."`
 }
 
 func main() {
