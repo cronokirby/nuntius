@@ -116,7 +116,7 @@ type ServerCommand struct {
 
 func (cmd *ServerCommand) Run(database string) error {
 	fmt.Println("Listening on port", cmd.Port)
-	server.Run(cmd.Port)
+	server.Run(database, cmd.Port)
 	return nil
 }
 
