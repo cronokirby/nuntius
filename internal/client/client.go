@@ -1,15 +1,23 @@
 package client
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/user"
 	"path"
 	"strings"
+
+	"github.com/cronokirby/nuntius/internal/server"
+	"golang.org/x/crypto/curve25519"
 )
 
 // IdentityPub represents the public part of an identity key.
@@ -61,6 +69,12 @@ func GenerateIdentity() (IdentityPub, IdentityPriv, error) {
 	return IdentityPub(pub), IdentityPriv(priv), nil
 }
 
+type ExchangePub []byte
+
+const ExchangePubSize = curve25519.PointSize
+
+type ExchangePriv []byte
+
 // ClientStore represents a store for information local to the client application.
 //
 // This allows us to store things like a user's personal private keys,
@@ -68,6 +82,8 @@ func GenerateIdentity() (IdentityPub, IdentityPriv, error) {
 type ClientStore interface {
 	// GetIdentity returns the user's current identity, if any, or an error
 	GetIdentity() (IdentityPub, error)
+	// GetIdentity returns the user's current identity, and private key, if any, or an error
+	GetFullIdentity() (IdentityPub, IdentityPriv, error)
 	// SaveIdentity saves an identity key-pair, replacing any existing identity
 	SaveIdentity(IdentityPub, IdentityPriv) error
 	// AddFriend registers a friend by identity, and name
@@ -129,6 +145,19 @@ func (store *clientDatabase) GetIdentity() (IdentityPub, error) {
 	return pub, nil
 }
 
+func (store *clientDatabase) GetFullIdentity() (IdentityPub, IdentityPriv, error) {
+	var pub IdentityPub
+	var priv IdentityPriv
+	err := store.QueryRow("SELECT public, private FROM identity LIMIT 1;").Scan(&pub, &priv)
+	if err == sql.ErrNoRows {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return pub, priv, nil
+}
+
 func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) error {
 	_, err := store.Exec(`
 	INSERT OR REPLACE INTO identity (id, public, private) VALUES (true, $1, $2);
@@ -159,4 +188,67 @@ func NewStore(database string) (ClientStore, error) {
 		return nil, err
 	}
 	return db, err
+}
+
+type ClientAPI interface {
+	// SendPrekey registers a new prekey for this identity, accompanied with a signature
+	SendPrekey(identity IdentityPub, prekey ExchangePub, sig []byte) error
+}
+
+func NewClientAPI(url string) ClientAPI {
+	return &httpClientAPI{url}
+}
+
+type httpClientAPI struct {
+	root string
+}
+
+func (api *httpClientAPI) SendPrekey(identity IdentityPub, prekey ExchangePub, sig []byte) error {
+	idBase64 := base64.URLEncoding.EncodeToString(identity)
+	data := server.PrekeyRequest{
+		Prekey: prekey,
+		Sig:    sig,
+	}
+	body, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/prekey/%s", api.root, idBase64), bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	if !ok {
+		return errors.New(resp.Status)
+	}
+	return nil
+}
+
+func RenewPrekey(api ClientAPI, pub IdentityPub, priv IdentityPriv) (ExchangePub, ExchangePriv, error) {
+	scalar := make([]byte, curve25519.ScalarSize)
+	_, err := rand.Read(scalar)
+	if err != nil {
+		return nil, nil, err
+	}
+	point, err := curve25519.X25519(scalar, curve25519.Basepoint)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	prekey := ExchangePub(point)
+	sig := ed25519.Sign(ed25519.PrivateKey(priv), prekey)
+
+	err = api.SendPrekey(pub, prekey, sig)
+	if err != nil {
+		return nil, nil, err
+	}
+	return prekey, ExchangePriv(scalar), nil
 }

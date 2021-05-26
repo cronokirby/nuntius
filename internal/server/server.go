@@ -8,14 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cronokirby/nuntius/internal/client"
 	"github.com/gorilla/mux"
 )
-
-type prekeyRequest struct {
-	Prekey []byte
-	Sig    []byte
-}
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -24,13 +18,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-	if len(idBytes) != client.IdentityPubSize {
-		http.Error(w, fmt.Sprintf("Incorrect identity length: %d", len(idBytes)), http.StatusBadRequest)
-	}
-	id := client.IdentityPub(idBytes)
-	fmt.Println(id)
+	fmt.Println(idBytes)
 
-	var request prekeyRequest
+	var request PrekeyRequest
 	err = json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
