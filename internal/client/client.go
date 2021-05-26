@@ -17,6 +17,8 @@ import (
 // This is used to uniquely identity a given user as well.
 type IdentityPub ed25519.PublicKey
 
+const IdentityPubSize = ed25519.PublicKeySize
+
 const _IDENTITY_PUB_HEADER = "nuntiusの公開鍵"
 
 // String returns the string representation of an identity
@@ -34,7 +36,7 @@ func IdentityPubFromString(s string) (IdentityPub, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(bytes) != ed25519.PublicKeySize {
+	if len(bytes) != IdentityPubSize {
 		return nil, fmt.Errorf("decoded identity has incorrect length: %d", len(bytes))
 	}
 	return IdentityPub(bytes), nil
