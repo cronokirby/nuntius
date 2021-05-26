@@ -19,3 +19,15 @@ CREATE TABLE friend (
   name TEXT NOT NULL
 );
 ```
+
+# Server
+
+The pre-key table stores signed pre-keys for each identity.
+
+```
+CREATE TABLE prekey (
+  identity BLOB PRIMARY KEY NOT NULL,
+  prekey BLOB NOT NULL,
+  signature BLOB NOT NULL
+);
+```
