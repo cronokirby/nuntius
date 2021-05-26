@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -17,8 +18,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	idBytes, err := base64.URLEncoding.DecodeString(idBase64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	fmt.Println(idBytes)
 
 	var request PrekeyRequest
 	err = json.NewDecoder(r.Body).Decode(&request)
@@ -26,7 +27,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(request)
+	if !ed25519.Verify(ed25519.PublicKey(idBytes), request.Prekey, request.Sig) {
+		http.Error(w, "bad signature", http.StatusBadRequest)
+		return
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 }
