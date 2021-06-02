@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/cronokirby/nuntius/internal/client"
+	"github.com/cronokirby/nuntius/internal/crypto"
 	"github.com/cronokirby/nuntius/internal/server"
 	_ "modernc.org/sqlite"
 )
@@ -29,7 +30,7 @@ func (cmd *GenerateCommand) Run(database string) error {
 		fmt.Println("Use `--force` if you want to overwrite this identity.")
 		return nil
 	}
-	pub, priv, err := client.GenerateIdentity()
+	pub, priv, err := crypto.GenerateIdentity()
 	if err != nil {
 		return fmt.Errorf("couldn't generate identity pair: %w", err)
 	}
@@ -69,7 +70,7 @@ type AddFriendCommand struct {
 }
 
 func (cmd *AddFriendCommand) Run(database string) error {
-	pub, err := client.IdentityPubFromString(cmd.Pub)
+	pub, err := crypto.IdentityPubFromString(cmd.Pub)
 	if err != nil {
 		return err
 	}

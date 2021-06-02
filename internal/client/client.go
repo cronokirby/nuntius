@@ -2,11 +2,8 @@ package client
 
 import (
 	"bytes"
-	"crypto/ed25519"
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,66 +11,10 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"strings"
 
+	"github.com/cronokirby/nuntius/internal/crypto"
 	"github.com/cronokirby/nuntius/internal/server"
-	"golang.org/x/crypto/curve25519"
 )
-
-// IdentityPub represents the public part of an identity key.
-//
-// This is used to uniquely identity a given user as well.
-type IdentityPub ed25519.PublicKey
-
-const IdentityPubSize = ed25519.PublicKeySize
-
-const _IDENTITY_PUB_HEADER = "nuntiusの公開鍵"
-
-// String returns the string representation of an identity
-func (pub IdentityPub) String() string {
-	return fmt.Sprintf("%s%s", _IDENTITY_PUB_HEADER, hex.EncodeToString(pub))
-}
-
-// IdentityPubFromString attempts to parse an identity from a string, potentially failing
-func IdentityPubFromString(s string) (IdentityPub, error) {
-	if !strings.HasPrefix(s, _IDENTITY_PUB_HEADER) {
-		return nil, errors.New("identity has incorrect header")
-	}
-	hexString := strings.TrimPrefix(s, _IDENTITY_PUB_HEADER)
-	bytes, err := hex.DecodeString(hexString)
-	if err != nil {
-		return nil, err
-	}
-	if len(bytes) != IdentityPubSize {
-		return nil, fmt.Errorf("decoded identity has incorrect length: %d", len(bytes))
-	}
-	return IdentityPub(bytes), nil
-}
-
-// IdentityPriv represents the private part of an identity key.
-//
-// This should be kept secret. Leaking this key would allow
-// anyone else to impersonate the user with this identity.
-type IdentityPriv ed25519.PrivateKey
-
-// GenerateIdentity creates a new identity key-pair.
-//
-// This generates a new key, using a secure source of randomness.
-//
-// An error may be returned if generation fails.
-func GenerateIdentity() (IdentityPub, IdentityPriv, error) {
-	pub, priv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	return IdentityPub(pub), IdentityPriv(priv), nil
-}
-
-type ExchangePub []byte
-
-const ExchangePubSize = curve25519.PointSize
-
-type ExchangePriv []byte
 
 // ClientStore represents a store for information local to the client application.
 //
@@ -81,13 +22,13 @@ type ExchangePriv []byte
 // and other information that's useful for the application.
 type ClientStore interface {
 	// GetIdentity returns the user's current identity, if any, or an error
-	GetIdentity() (IdentityPub, error)
+	GetIdentity() (crypto.IdentityPub, error)
 	// GetIdentity returns the user's current identity, and private key, if any, or an error
-	GetFullIdentity() (IdentityPub, IdentityPriv, error)
+	GetFullIdentity() (crypto.IdentityPub, crypto.IdentityPriv, error)
 	// SaveIdentity saves an identity key-pair, replacing any existing identity
-	SaveIdentity(IdentityPub, IdentityPriv) error
+	SaveIdentity(crypto.IdentityPub, crypto.IdentityPriv) error
 	// AddFriend registers a friend by identity, and name
-	AddFriend(IdentityPub, string) error
+	AddFriend(crypto.IdentityPub, string) error
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -133,8 +74,8 @@ func newClientDatabase(database string) (*clientDatabase, error) {
 	return &clientDatabase{db}, nil
 }
 
-func (store *clientDatabase) GetIdentity() (IdentityPub, error) {
-	var pub IdentityPub
+func (store *clientDatabase) GetIdentity() (crypto.IdentityPub, error) {
+	var pub crypto.IdentityPub
 	err := store.QueryRow("SELECT public FROM identity LIMIT 1;").Scan(&pub)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -145,9 +86,9 @@ func (store *clientDatabase) GetIdentity() (IdentityPub, error) {
 	return pub, nil
 }
 
-func (store *clientDatabase) GetFullIdentity() (IdentityPub, IdentityPriv, error) {
-	var pub IdentityPub
-	var priv IdentityPriv
+func (store *clientDatabase) GetFullIdentity() (crypto.IdentityPub, crypto.IdentityPriv, error) {
+	var pub crypto.IdentityPub
+	var priv crypto.IdentityPriv
 	err := store.QueryRow("SELECT public, private FROM identity LIMIT 1;").Scan(&pub, &priv)
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
@@ -158,7 +99,7 @@ func (store *clientDatabase) GetFullIdentity() (IdentityPub, IdentityPriv, error
 	return pub, priv, nil
 }
 
-func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) error {
+func (store *clientDatabase) SaveIdentity(pub crypto.IdentityPub, priv crypto.IdentityPriv) error {
 	_, err := store.Exec(`
 	INSERT OR REPLACE INTO identity (id, public, private) VALUES (true, $1, $2);
 	`, pub, priv)
@@ -168,7 +109,7 @@ func (store *clientDatabase) SaveIdentity(pub IdentityPub, priv IdentityPriv) er
 	return nil
 }
 
-func (store *clientDatabase) AddFriend(pub IdentityPub, name string) error {
+func (store *clientDatabase) AddFriend(pub crypto.IdentityPub, name string) error {
 	_, err := store.Exec(`
 	INSERT OR REPLACE INTO friend (public, name)
 	VALUES ($1, $2);
@@ -192,7 +133,7 @@ func NewStore(database string) (ClientStore, error) {
 
 type ClientAPI interface {
 	// SendPrekey registers a new prekey for this identity, accompanied with a signature
-	SendPrekey(identity IdentityPub, prekey ExchangePub, sig []byte) error
+	SendPrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, sig []byte) error
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -203,7 +144,7 @@ type httpClientAPI struct {
 	root string
 }
 
-func (api *httpClientAPI) SendPrekey(identity IdentityPub, prekey ExchangePub, sig []byte) error {
+func (api *httpClientAPI) SendPrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, sig []byte) error {
 	idBase64 := base64.URLEncoding.EncodeToString(identity)
 	data := server.PrekeyRequest{
 		Prekey: prekey,
@@ -232,23 +173,15 @@ func (api *httpClientAPI) SendPrekey(identity IdentityPub, prekey ExchangePub, s
 	return nil
 }
 
-func RenewPrekey(api ClientAPI, pub IdentityPub, priv IdentityPriv) (ExchangePub, ExchangePriv, error) {
-	scalar := make([]byte, curve25519.ScalarSize)
-	_, err := rand.Read(scalar)
+func RenewPrekey(api ClientAPI, pub crypto.IdentityPub, priv crypto.IdentityPriv) (crypto.ExchangePub, crypto.ExchangePriv, error) {
+	exchangePub, exchangePriv, err := crypto.GenerateExchange()
 	if err != nil {
 		return nil, nil, err
 	}
-	point, err := curve25519.X25519(scalar, curve25519.Basepoint)
+	sig := priv.Sign(exchangePub)
+	err = api.SendPrekey(pub, exchangePub, sig)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	prekey := ExchangePub(point)
-	sig := ed25519.Sign(ed25519.PrivateKey(priv), prekey)
-
-	err = api.SendPrekey(pub, prekey, sig)
-	if err != nil {
-		return nil, nil, err
-	}
-	return prekey, ExchangePriv(scalar), nil
+	return exchangePub, exchangePriv, nil
 }

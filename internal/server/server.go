@@ -1,9 +1,7 @@
 package server
 
 import (
-	"crypto/ed25519"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,6 +11,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/cronokirby/nuntius/internal/crypto"
 	"github.com/gorilla/mux"
 )
 
@@ -36,7 +35,7 @@ func newServer(database string) (*server, error) {
 		return nil, err
 	}
 	_, err = db.Exec(`
-	CREATE TABLE prekey (
+	CREATE TABLE IF NOT EXISTS prekey (
 		identity BLOB PRIMARY KEY NOT NULL,
 		prekey BLOB NOT NULL,
 		signature BLOB NOT NULL
@@ -48,7 +47,7 @@ func newServer(database string) (*server, error) {
 	return &server{db}, nil
 }
 
-func (server *server) savePrekey(identity, prekey, signature []byte) error {
+func (server *server) savePrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, signature []byte) error {
 	_, err := server.Exec(`
 	INSERT OR REPLACE INTO prekey (identity, prekey, signature) VALUES ($1, $2, $3);
 	`, identity, prekey, signature)
@@ -57,24 +56,27 @@ func (server *server) savePrekey(identity, prekey, signature []byte) error {
 
 func (server *server) prekeyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	idBase64 := vars["id"]
-	idBytes, err := base64.URLEncoding.DecodeString(idBase64)
+	id, err := crypto.IdentityPubFromBase64(vars["id"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
-
 	var request PrekeyRequest
 	err = json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !ed25519.Verify(ed25519.PublicKey(idBytes), request.Prekey, request.Sig) {
+	prekey, err := crypto.ExchangePubFromBytes(request.Prekey)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !id.Verify(prekey, request.Sig) {
 		http.Error(w, "bad signature", http.StatusBadRequest)
 		return
 	}
-	err = server.savePrekey(idBytes, request.Prekey, request.Sig)
+
+	err = server.savePrekey(id, request.Prekey, request.Sig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
