@@ -151,6 +151,8 @@ func NewStore(database string) (ClientStore, error) {
 type ClientAPI interface {
 	// SendPrekey registers a new prekey for this identity, accompanied with a signature
 	SendPrekey(crypto.IdentityPub, crypto.ExchangePub, crypto.Signature) error
+	// CountOnetimes asks how many onetime keys this identity has registered with a server
+	CountOnetimes(crypto.IdentityPub) (int, error)
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -171,14 +173,7 @@ func (api *httpClientAPI) SendPrekey(identity crypto.IdentityPub, prekey crypto.
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/prekey/%s", api.root, idBase64), bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.Post(fmt.Sprintf("%s/prekey/%s", api.root, idBase64), "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -201,4 +196,27 @@ func RenewPrekey(api ClientAPI, pub crypto.IdentityPub, priv crypto.IdentityPriv
 		return nil, nil, err
 	}
 	return exchangePub, exchangePriv, nil
+}
+
+func (api *httpClientAPI) CountOnetimes(identity crypto.IdentityPub) (int, error) {
+	var count int
+
+	idBase64 := base64.URLEncoding.EncodeToString(identity)
+	resp, err := http.Get(fmt.Sprintf("%s/onetime/%s", api.root, idBase64))
+	if err != nil {
+		return count, err
+	}
+	defer resp.Body.Close()
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	if !ok {
+		return count, errors.New(resp.Status)
+	}
+
+	var data server.CountOnetimeResponse
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return count, err
+	}
+
+	return data.Count, nil
 }

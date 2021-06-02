@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/alecthomas/kong"
@@ -105,7 +106,17 @@ func (cmd *RegisterCommand) Run(database string) error {
 	if err != nil {
 		return err
 	}
-	return store.SavePrekey(xPub, xPriv)
+	err = store.SavePrekey(xPub, xPriv)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("New Prekey registered:\n  %s\n", hex.EncodeToString(xPub))
+	count, err := api.CountOnetimes(pub)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("One-Time keys: %d\n", count)
+	return nil
 }
 
 type ServerCommand struct {
