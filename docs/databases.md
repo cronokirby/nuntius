@@ -54,7 +54,8 @@ The onetime key table stores the bundles associated with different identities.
 
 ```
 CREATE TABLE onetime (
-  identity BLOB PRIMARY KEY NOT NULL,
+  id INTEGER PRIMARY KEY,
+  identity BLOB NOT NULL,
   onetime BLOB NOT NULL
 );
 ```

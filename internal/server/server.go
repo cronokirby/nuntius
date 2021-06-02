@@ -40,6 +40,11 @@ func newServer(database string) (*server, error) {
 		prekey BLOB NOT NULL,
 		signature BLOB NOT NULL
 	);
+
+	CREATE TABLE IF NOT EXISTS onetime (
+		identity BLOB PRIMARY KEY NOT NULL,
+		onetime BLOB NOT NULL
+	);
 	`)
 	if err != nil {
 		return nil, err
@@ -54,11 +59,23 @@ func (server *server) savePrekey(identity crypto.IdentityPub, prekey crypto.Exch
 	return err
 }
 
+func (server *server) countOnetimes(identity crypto.IdentityPub) (int, error) {
+	var count int
+	err := server.QueryRow(`
+	SELECT COUNT(*) FROM onetime WHERE identity = $1;
+	`, identity).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (server *server) prekeyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := crypto.IdentityPubFromBase64(vars["id"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	var request PrekeyRequest
 	err = json.NewDecoder(r.Body).Decode(&request)
@@ -84,6 +101,27 @@ func (server *server) prekeyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (server *server) onetimeHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := crypto.IdentityPubFromBase64(vars["id"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	count, err := server.countOnetimes(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	response := CountOnetimeResponse{count}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(response)
+}
+
 func Run(database string, port int) {
 	server, err := newServer(database)
 	if err != nil {
@@ -92,6 +130,7 @@ func Run(database string, port int) {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/prekey/{id}", server.prekeyHandler).Methods("POST")
+	r.HandleFunc("/onetime/{id}", server.onetimeHandler).Methods("GET")
 
 	srv := &http.Server{
 		Handler:      r,
