@@ -128,3 +128,46 @@ func (priv IdentityPriv) Sign(data []byte) Signature {
 func (pub IdentityPub) Verify(data []byte, sig Signature) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), data, sig)
 }
+
+// PublicBundle is a collection of single-use exchange keys
+type PublicBundle []ExchangePub
+
+// PrivateBundle is a collection of the private counterparts to single-use exchange keys
+type PrivateBundle []ExchangePriv
+
+const bundleSize = 64
+
+// GenerateBundle generates a new bundle of exchange keys, possibly failing
+func GenerateBundle() (PublicBundle, PrivateBundle, error) {
+	publicBundle := make([]ExchangePub, bundleSize)
+	privateBundle := make([]ExchangePriv, bundleSize)
+	for i := 0; i < bundleSize; i++ {
+		pub, priv, err := GenerateExchange()
+		if err != nil {
+			return nil, nil, err
+		}
+		publicBundle[i] = pub
+		privateBundle[i] = priv
+	}
+	return publicBundle, privateBundle, nil
+}
+
+func (bundle PublicBundle) bytes() []byte {
+	data := make([]byte, len(bundle)*ExchangePubSize)
+	i := 0
+	for _, pub := range bundle {
+		copy(data[i:], pub)
+		i += ExchangePubSize
+	}
+	return data
+}
+
+// SignBundle uses an identity key to sign a bundle of exchange keys
+func (priv IdentityPriv) SignBundle(bundle PublicBundle) Signature {
+	return priv.Sign(bundle.bytes())
+}
+
+// VerifyBundle verifies a signature generated over a bundle of exchange keys
+func (pub IdentityPub) VerifyBundle(bundle PublicBundle, sig Signature) bool {
+	return pub.Verify(bundle.bytes(), sig)
+}
