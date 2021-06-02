@@ -150,7 +150,7 @@ func NewStore(database string) (ClientStore, error) {
 
 type ClientAPI interface {
 	// SendPrekey registers a new prekey for this identity, accompanied with a signature
-	SendPrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, sig []byte) error
+	SendPrekey(crypto.IdentityPub, crypto.ExchangePub, crypto.Signature) error
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -161,7 +161,7 @@ type httpClientAPI struct {
 	root string
 }
 
-func (api *httpClientAPI) SendPrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, sig []byte) error {
+func (api *httpClientAPI) SendPrekey(identity crypto.IdentityPub, prekey crypto.ExchangePub, sig crypto.Signature) error {
 	idBase64 := base64.URLEncoding.EncodeToString(identity)
 	data := server.PrekeyRequest{
 		Prekey: prekey,
