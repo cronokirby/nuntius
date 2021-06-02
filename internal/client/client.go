@@ -29,6 +29,8 @@ type ClientStore interface {
 	SaveIdentity(crypto.IdentityPub, crypto.IdentityPriv) error
 	// AddFriend registers a friend by identity, and name
 	AddFriend(crypto.IdentityPub, string) error
+	// SavePrekey saves a full prekey pair, possibly failing
+	SavePrekey(crypto.ExchangePub, crypto.ExchangePriv) error
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -66,6 +68,11 @@ func newClientDatabase(database string) (*clientDatabase, error) {
 	CREATE TABLE IF NOT EXISTS friend (
  		public BLOB PRIMARY KEY NOT NULL,
   	name TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS prekey (
+		public BLOB PRIMARY KEY NOT NULL,
+		private BLOB NOT NULL
 	);
 	`)
 	if err != nil {
@@ -115,6 +122,16 @@ func (store *clientDatabase) AddFriend(pub crypto.IdentityPub, name string) erro
 	VALUES ($1, $2);
 	`, pub, name)
 	return err
+}
+
+func (store *clientDatabase) SavePrekey(pub crypto.ExchangePub, priv crypto.ExchangePriv) error {
+	_, err := store.Exec(`
+	INSERT OR REPLACE INTO prekey (public, private) VALUES ($1, $2);
+	`, pub, priv)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewStore creates a new ClientStore given a path to a local database.

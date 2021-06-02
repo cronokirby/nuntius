@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/alecthomas/kong"
@@ -106,9 +105,7 @@ func (cmd *RegisterCommand) Run(database string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("xPub", hex.EncodeToString(xPub))
-	fmt.Println("xPriv", hex.EncodeToString(xPriv))
-	return nil
+	return store.SavePrekey(xPub, xPriv)
 }
 
 type ServerCommand struct {

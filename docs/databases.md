@@ -20,6 +20,15 @@ CREATE TABLE friend (
 );
 ```
 
+The pre-key table stores the full pre-keys we've registered with the server:
+
+```
+CREATE TABLE prekey (
+  public BLOB PRIMARY KEY NOT NULL,
+  private BLOB NOT NULL
+);
+```
+
 # Server
 
 The pre-key table stores signed pre-keys for each identity.
