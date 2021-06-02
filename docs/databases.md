@@ -29,6 +29,15 @@ CREATE TABLE prekey (
 );
 ```
 
+The onetime table stores onetime keys used for exchange.
+
+```
+CREATE TABLE onetime (
+  public BLOB PRIMARY KEY NOT NUll,
+  private BLOB NOT NULL
+)
+```
+
 # Server
 
 The pre-key table stores signed pre-keys for each identity.
@@ -38,5 +47,14 @@ CREATE TABLE prekey (
   identity BLOB PRIMARY KEY NOT NULL,
   prekey BLOB NOT NULL,
   signature BLOB NOT NULL
+);
+```
+
+The onetime key table stores the bundles associated with different identities.
+
+```
+CREATE TABLE onetime (
+  identity BLOB PRIMARY KEY NOT NULL,
+  onetime BLOB NOT NULL
 );
 ```
