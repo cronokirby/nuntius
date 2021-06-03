@@ -180,6 +180,8 @@ type ClientAPI interface {
 	SendPrekey(crypto.IdentityPub, crypto.ExchangePub, crypto.Signature) error
 	// CountOnetimes asks how many onetime keys this identity has registered with a server
 	CountOnetimes(crypto.IdentityPub) (int, error)
+	// SendBundle sends out a bundle, accompanied with a signature
+	SendBundle(crypto.IdentityPub, crypto.BundlePub, crypto.Signature) error
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -229,7 +231,7 @@ func (api *httpClientAPI) CountOnetimes(identity crypto.IdentityPub) (int, error
 	var count int
 
 	idBase64 := base64.URLEncoding.EncodeToString(identity)
-	resp, err := http.Get(fmt.Sprintf("%s/onetime/%s", api.root, idBase64))
+	resp, err := http.Get(fmt.Sprintf("%s/onetime/count/%s", api.root, idBase64))
 	if err != nil {
 		return count, err
 	}
@@ -248,6 +250,28 @@ func (api *httpClientAPI) CountOnetimes(identity crypto.IdentityPub) (int, error
 	return data.Count, nil
 }
 
+func (api *httpClientAPI) SendBundle(identity crypto.IdentityPub, bundle crypto.BundlePub, sig crypto.Signature) error {
+	idBase64 := base64.URLEncoding.EncodeToString(identity)
+	data := server.SendBundleRequest{
+		Bundle: bundle,
+		Sig:    sig,
+	}
+	body, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post(fmt.Sprintf("%s/onetime/%s", api.root, idBase64), "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	if !ok {
+		return errors.New(resp.Status)
+	}
+	return nil
+}
+
 const requiredOnetimeSize = 10
 
 func CreateNewBundleIfNecessary(api ClientAPI, store ClientStore, pub crypto.IdentityPub, priv crypto.IdentityPriv) (bool, error) {
@@ -263,6 +287,11 @@ func CreateNewBundleIfNecessary(api ClientAPI, store ClientStore, pub crypto.Ide
 		return false, err
 	}
 	err = store.SaveBundle(bundlePub, bundlePriv)
+	if err != nil {
+		return false, err
+	}
+	sig := priv.SignBundle(bundlePub)
+	err = api.SendBundle(pub, bundlePub, sig)
 	if err != nil {
 		return false, err
 	}

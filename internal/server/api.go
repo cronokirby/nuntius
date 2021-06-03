@@ -8,3 +8,8 @@ type PrekeyRequest struct {
 type CountOnetimeResponse struct {
 	Count int `json:"count"`
 }
+
+type SendBundleRequest struct {
+	Bundle []byte `json:"bundle"`
+	Sig    []byte `json:"sig"`
+}

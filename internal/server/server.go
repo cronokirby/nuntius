@@ -42,7 +42,8 @@ func newServer(database string) (*server, error) {
 	);
 
 	CREATE TABLE IF NOT EXISTS onetime (
-		identity BLOB PRIMARY KEY NOT NULL,
+		id INTEGER PRIMARY KEY,
+		identity BLOB NOT NULL,
 		onetime BLOB NOT NULL
 	);
 	`)
@@ -68,6 +69,23 @@ func (server *server) countOnetimes(identity crypto.IdentityPub) (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+func (server *server) saveBundle(identity crypto.IdentityPub, bundle crypto.BundlePub) error {
+	tx, err := server.Begin()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < bundle.Len(); i++ {
+		_, err := tx.Exec(`
+		INSERT INTO onetime (identity, onetime) VALUES ($1, $2)
+		`, identity, bundle.Get(i))
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (server *server) prekeyHandler(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +119,7 @@ func (server *server) prekeyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (server *server) onetimeHandler(w http.ResponseWriter, r *http.Request) {
+func (server *server) onetimeCountHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := crypto.IdentityPubFromBase64(vars["id"])
 	if err != nil {
@@ -122,6 +140,45 @@ func (server *server) onetimeHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func (server *server) onetimeHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := crypto.IdentityPubFromBase64(vars["id"])
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var request SendBundleRequest
+	err = json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	bundle, err := crypto.BundleFromBytes(request.Bundle)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !id.VerifyBundle(bundle, request.Sig) {
+		http.Error(w, "bad signature", http.StatusBadRequest)
+		fmt.Println("bad signature")
+		return
+	}
+
+	err = server.saveBundle(id, bundle)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func Run(database string, port int) {
 	server, err := newServer(database)
 	if err != nil {
@@ -130,7 +187,8 @@ func Run(database string, port int) {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/prekey/{id}", server.prekeyHandler).Methods("POST")
-	r.HandleFunc("/onetime/{id}", server.onetimeHandler).Methods("GET")
+	r.HandleFunc("/onetime/{id}", server.onetimeHandler).Methods("POST")
+	r.HandleFunc("/onetime/count/{id}", server.onetimeCountHandler).Methods("GET")
 
 	srv := &http.Server{
 		Handler:      r,
