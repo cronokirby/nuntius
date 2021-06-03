@@ -111,11 +111,13 @@ func (cmd *RegisterCommand) Run(database string) error {
 		return err
 	}
 	fmt.Printf("New Prekey registered:\n  %s\n", hex.EncodeToString(xPub))
-	count, err := api.CountOnetimes(pub)
+	newBundle, err := client.CreateNewBundleIfNecessary(api, store, pub, priv)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("One-Time keys: %d\n", count)
+	if newBundle {
+		fmt.Println("New bundle created.")
+	}
 	return nil
 }
 

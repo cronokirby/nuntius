@@ -31,6 +31,8 @@ type ClientStore interface {
 	AddFriend(crypto.IdentityPub, string) error
 	// SavePrekey saves a full prekey pair, possibly failing
 	SavePrekey(crypto.ExchangePub, crypto.ExchangePriv) error
+	// SaveBundle saves the public and private parts of a bundle, possibly failing
+	SaveBundle(crypto.BundlePub, crypto.BundlePriv) error
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -72,6 +74,11 @@ func newClientDatabase(database string) (*clientDatabase, error) {
 
 	CREATE TABLE IF NOT EXISTS prekey (
 		public BLOB PRIMARY KEY NOT NULL,
+		private BLOB NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS onetime (
+		public BLOB PRIMARY KEY NOT NUll,
 		private BLOB NOT NULL
 	);
 	`)
@@ -132,6 +139,26 @@ func (store *clientDatabase) SavePrekey(pub crypto.ExchangePub, priv crypto.Exch
 		return err
 	}
 	return nil
+}
+
+func (store *clientDatabase) SaveBundle(pub crypto.BundlePub, priv crypto.BundlePriv) error {
+	if pub.Len() != len(priv) {
+		return fmt.Errorf("public bundle length %d is not equal to private bundle length %d", pub.Len(), len(priv))
+	}
+	tx, err := store.Begin()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(priv); i++ {
+		_, err := tx.Exec(`
+		INSERT INTO onetime (public, private) VALUES ($1, $2);
+		`, pub.Get(i), priv[i])
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // NewStore creates a new ClientStore given a path to a local database.
@@ -219,4 +246,25 @@ func (api *httpClientAPI) CountOnetimes(identity crypto.IdentityPub) (int, error
 	}
 
 	return data.Count, nil
+}
+
+const requiredOnetimeSize = 10
+
+func CreateNewBundleIfNecessary(api ClientAPI, store ClientStore, pub crypto.IdentityPub, priv crypto.IdentityPriv) (bool, error) {
+	count, err := api.CountOnetimes(pub)
+	if err != nil {
+		return false, err
+	}
+	if count >= requiredOnetimeSize {
+		return false, nil
+	}
+	bundlePub, bundlePriv, err := crypto.GenerateBundle()
+	if err != nil {
+		return false, err
+	}
+	err = store.SaveBundle(bundlePub, bundlePriv)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
