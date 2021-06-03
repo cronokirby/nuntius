@@ -130,7 +130,7 @@ func (pub IdentityPub) Verify(data []byte, sig Signature) bool {
 }
 
 // PublicBundle is a collection of single-use exchange keys
-type PublicBundle []ExchangePub
+type PublicBundle []byte
 
 // PrivateBundle is a collection of the private counterparts to single-use exchange keys
 type PrivateBundle []ExchangePriv
@@ -139,35 +139,49 @@ const bundleSize = 64
 
 // GenerateBundle generates a new bundle of exchange keys, possibly failing
 func GenerateBundle() (PublicBundle, PrivateBundle, error) {
-	publicBundle := make([]ExchangePub, bundleSize)
+	publicBundle := make([]byte, bundleSize*ExchangePubSize)
 	privateBundle := make([]ExchangePriv, bundleSize)
 	for i := 0; i < bundleSize; i++ {
 		pub, priv, err := GenerateExchange()
 		if err != nil {
 			return nil, nil, err
 		}
-		publicBundle[i] = pub
+		copy(publicBundle[i*ExchangePubSize:], pub)
 		privateBundle[i] = priv
 	}
 	return publicBundle, privateBundle, nil
 }
 
-func (bundle PublicBundle) bytes() []byte {
-	data := make([]byte, len(bundle)*ExchangePubSize)
-	i := 0
-	for _, pub := range bundle {
-		copy(data[i:], pub)
-		i += ExchangePubSize
+// BundleFromBytes converts a slice of bytes into a public bundle.
+//
+// This will fail if the length of the data doesn't match an expected length for a bundle.
+func BundleFromBytes(data []byte) (PublicBundle, error) {
+	if len(data)%ExchangePubSize != 0 {
+		return nil, errors.New("data is not a multiple of exchange key size")
 	}
-	return data
+	return PublicBundle(data), nil
+}
+
+// Get returns the exchange key at a given index.
+//
+// This will panic if the index is < 0 or >= bundle.Len().
+func (bundle PublicBundle) Get(index int) ExchangePub {
+	start := index * ExchangePubSize
+	stop := start + ExchangePubSize
+	return ExchangePub(bundle[start:stop])
+}
+
+// Len returns the number of exchange keys in this bundle
+func (bundle PublicBundle) Len() int {
+	return len(bundle) / ExchangePubSize
 }
 
 // SignBundle uses an identity key to sign a bundle of exchange keys
 func (priv IdentityPriv) SignBundle(bundle PublicBundle) Signature {
-	return priv.Sign(bundle.bytes())
+	return priv.Sign(bundle)
 }
 
 // VerifyBundle verifies a signature generated over a bundle of exchange keys
 func (pub IdentityPub) VerifyBundle(bundle PublicBundle, sig Signature) bool {
-	return pub.Verify(bundle.bytes(), sig)
+	return pub.Verify(bundle, sig)
 }
