@@ -131,6 +131,37 @@ func (cmd *ServerCommand) Run(database string) error {
 	return nil
 }
 
+type ChatCommand struct {
+	URL string `arg help:"The URL used to access this server"`
+}
+
+func (cmd *ChatCommand) Run(database string) error {
+	store, err := client.NewStore(database)
+	if err != nil {
+		return fmt.Errorf("couldn't connect to database: %w", err)
+	}
+
+	pub, err := store.GetIdentity()
+	if err != nil {
+		return err
+	}
+	if pub == nil {
+		fmt.Println("No identity found.")
+		fmt.Println("You can use `nuntius generate` to generate an identity.")
+		return nil
+	}
+
+	api := client.NewClientAPI(cmd.URL)
+	prekey, sig, onetime, err := api.CreateSession(pub)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Prekey:", hex.EncodeToString(prekey))
+	fmt.Println("Sig:", hex.EncodeToString(sig))
+	fmt.Println("Onetime:", hex.EncodeToString(onetime))
+	return nil
+}
+
 var cli struct {
 	Database string `optional name:"database" help:"Path to local database." type:"path"`
 
@@ -139,6 +170,7 @@ var cli struct {
 	AddFriend AddFriendCommand `cmd help:"Add a new friend"`
 	Register  RegisterCommand  `cmd help:"Register with a server"`
 	Server    ServerCommand    `cmd help:"Start a server."`
+	Chat      ChatCommand      `cmd help:"Chat with a friend."`
 }
 
 func main() {

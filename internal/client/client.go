@@ -182,6 +182,8 @@ type ClientAPI interface {
 	CountOnetimes(crypto.IdentityPub) (int, error)
 	// SendBundle sends out a bundle, accompanied with a signature
 	SendBundle(crypto.IdentityPub, crypto.BundlePub, crypto.Signature) error
+	// CreateSession accesses a new set of exchange keys for a session
+	CreateSession(crypto.IdentityPub) (crypto.ExchangePub, crypto.Signature, crypto.ExchangePub, error)
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -270,6 +272,38 @@ func (api *httpClientAPI) SendBundle(identity crypto.IdentityPub, bundle crypto.
 		return errors.New(resp.Status)
 	}
 	return nil
+}
+
+func (api *httpClientAPI) CreateSession(identity crypto.IdentityPub) (crypto.ExchangePub, crypto.Signature, crypto.ExchangePub, error) {
+	idBase64 := base64.URLEncoding.EncodeToString(identity)
+	resp, err := http.Post(fmt.Sprintf("%s/session/%s", api.root, idBase64), "application/json", nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer resp.Body.Close()
+
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	if !ok {
+		return nil, nil, nil, errors.New(resp.Status)
+	}
+
+	var data server.SessionResponse
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	prekey, err := crypto.ExchangePubFromBytes(data.Prekey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	onetime, err := crypto.ExchangePubFromBytes(data.OneTime)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return prekey, data.Sig, onetime, nil
 }
 
 const requiredOnetimeSize = 10
