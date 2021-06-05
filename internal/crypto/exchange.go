@@ -3,16 +3,21 @@ package crypto
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
+	"filippo.io/edwards25519"
 	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
 )
 
 const ExchangePubSize = curve25519.PointSize
+const ExchangeSecretSize = curve25519.PointSize
 
 // ExchangePub is the public component of an exchange key
 type ExchangePub []byte
@@ -48,6 +53,10 @@ func ExchangePubFromBytes(pubBytes []byte) (ExchangePub, error) {
 		return nil, fmt.Errorf("incorrect ExchangePub size: %d", len(pubBytes))
 	}
 	return ExchangePub(pubBytes), nil
+}
+
+func (priv ExchangePriv) exchange(pub ExchangePub) ([]byte, error) {
+	return curve25519.X25519(priv, pub)
 }
 
 // Signature represents a signature over some data with an identity key
@@ -129,6 +138,22 @@ func (pub IdentityPub) Verify(data []byte, sig Signature) bool {
 	return ed25519.Verify(ed25519.PublicKey(pub), data, sig)
 }
 
+func (priv IdentityPriv) toExchange() ExchangePriv {
+	hash := sha512.New()
+	hash.Write(priv[:32])
+	digest := hash.Sum(nil)
+	return digest[:curve25519.ScalarSize]
+}
+
+func (pub IdentityPub) toExchange() (ExchangePub, error) {
+	p := new(edwards25519.Point)
+	_, err := p.SetBytes(pub)
+	if err != nil {
+		return nil, err
+	}
+	return p.BytesMontgomery(), nil
+}
+
 // BundlePub is a collection of single-use exchange keys
 type BundlePub []byte
 
@@ -184,4 +209,119 @@ func (priv IdentityPriv) SignBundle(bundle BundlePub) Signature {
 // VerifyBundle verifies a signature generated over a bundle of exchange keys
 func (pub IdentityPub) VerifyBundle(bundle BundlePub, sig Signature) bool {
 	return pub.Verify(bundle, sig)
+}
+
+type SharedSecret []byte
+
+const SharedSecretSize = 32
+
+type ForwardExchangeParams struct {
+	me        IdentityPriv
+	ephemeral ExchangePriv
+	identity  IdentityPub
+	prekey    ExchangePub
+	onetime   ExchangePub
+}
+
+var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
+
+func ForwardExchange(params *ForwardExchangeParams) (SharedSecret, error) {
+	meX := params.me.toExchange()
+	idX, err := params.identity.toExchange()
+	if err != nil {
+		return nil, err
+	}
+	secret := make([]byte, ExchangeSecretSize*4)
+
+	dh1, err := meX.exchange(params.prekey)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret, dh1)
+
+	dh2, err := params.ephemeral.exchange(idX)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret[ExchangeSecretSize:], dh2)
+
+	dh3, err := params.ephemeral.exchange(params.prekey)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret[2*ExchangeSecretSize:], dh3)
+
+	if params.onetime == nil {
+		secret = secret[:3*ExchangeSecretSize]
+	} else {
+		dh4, err := params.ephemeral.exchange(params.onetime)
+		if err != nil {
+			return nil, err
+		}
+		copy(secret[3*ExchangeSecretSize:], dh4)
+	}
+
+	kdf := hkdf.New(sha512.New, secret, nil, exchangeInfo)
+	out := make([]byte, SharedSecretSize)
+	_, err = io.ReadFull(kdf, out)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
+
+type BackwardExchangeParams struct {
+	them      IdentityPub
+	ephemeral ExchangePub
+	identity  IdentityPriv
+	prekey    ExchangePriv
+	onetime   ExchangePriv
+}
+
+func BackwardExchange(params *BackwardExchangeParams) (SharedSecret, error) {
+	themX, err := params.them.toExchange()
+	if err != nil {
+		return nil, err
+	}
+	idX := params.identity.toExchange()
+
+	secret := make([]byte, ExchangeSecretSize*4)
+
+	dh1, err := params.prekey.exchange(themX)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret, dh1)
+
+	dh2, err := idX.exchange(params.ephemeral)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret[ExchangeSecretSize:], dh2)
+
+	dh3, err := params.prekey.exchange(params.ephemeral)
+	if err != nil {
+		return nil, err
+	}
+	copy(secret[2*ExchangeSecretSize:], dh3)
+
+	if params.onetime == nil {
+		secret = secret[:3*ExchangeSecretSize]
+	} else {
+		dh4, err := params.onetime.exchange(params.ephemeral)
+		if err != nil {
+			return nil, err
+		}
+		copy(secret[3*ExchangeSecretSize:], dh4)
+	}
+
+	kdf := hkdf.New(sha512.New, secret, nil, exchangeInfo)
+	out := make([]byte, SharedSecretSize)
+	_, err = io.ReadFull(kdf, out)
+	if err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
