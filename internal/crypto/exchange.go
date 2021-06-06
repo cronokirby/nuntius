@@ -211,20 +211,32 @@ func (pub IdentityPub) VerifyBundle(bundle BundlePub, sig Signature) bool {
 	return pub.Verify(bundle, sig)
 }
 
+// SharedSecret is derived between two parties, exchanging only public information
 type SharedSecret []byte
 
+// SharedSecretSize is the number of bytes in a shared secret
 const SharedSecretSize = 32
 
+// ForwardExchangeParams is the information to do an exchange, from a person initiating the exchange
 type ForwardExchangeParams struct {
-	me        IdentityPriv
+	// The private identity key for the initiator
+	me IdentityPriv
+	// The private part of an ephemeral exchange key
 	ephemeral ExchangePriv
-	identity  IdentityPub
-	prekey    ExchangePub
-	onetime   ExchangePub
+	// The public identity key for the recipient
+	identity IdentityPub
+	// The signed prekey for the recipient
+	prekey ExchangePub
+	// The onetime key for the recipient
+	onetime ExchangePub
 }
 
 var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
 
+// ForwardExchange performs an exchange with the parameters, deriving a shared secret.
+//
+// This exchange is used by an initiator, with their private information, to derive
+// a shared secret with a recipient, using their public information.
 func ForwardExchange(params *ForwardExchangeParams) (SharedSecret, error) {
 	meX := params.me.toExchange()
 	idX, err := params.identity.toExchange()
@@ -271,14 +283,25 @@ func ForwardExchange(params *ForwardExchangeParams) (SharedSecret, error) {
 	return out, nil
 }
 
+// BackwardExchangeParams contains the parameters for an exchange from a recipient
 type BackwardExchangeParams struct {
-	them      IdentityPub
+	// The public identity of the initiator
+	them IdentityPub
+	// The ephemeral key used by the initiator
 	ephemeral ExchangePub
-	identity  IdentityPriv
-	prekey    ExchangePriv
-	onetime   ExchangePriv
+	// The private identity of the recipient
+	identity IdentityPriv
+	// The private prekey of the recipient
+	prekey ExchangePriv
+	// The private onetime key of the recipient
+	onetime ExchangePriv
 }
 
+// BackwardExchange derives a shared secret, using the initiators public information
+//
+// This is the corollary to ForwardExchange, allow the recipient to derive a shared
+// secret with an initiator. This is done with the recipient's private information,
+// and the initiator's public information.
 func BackwardExchange(params *BackwardExchangeParams) (SharedSecret, error) {
 	themX, err := params.them.toExchange()
 	if err != nil {
