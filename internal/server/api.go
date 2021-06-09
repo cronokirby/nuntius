@@ -19,3 +19,9 @@ type SessionResponse struct {
 	Sig     []byte `json:"sig"`
 	OneTime []byte `json:"onetime,omitempty"`
 }
+
+type Message struct {
+	From    []byte `json:"from"`
+	To      []byte `json:"to"`
+	Payload string `json:"payload"`
+}
