@@ -11,13 +11,15 @@ import (
 )
 
 func forwardMessages(messages <-chan Message, conn *websocket.Conn) {
-	message, closed := <-messages
-	if closed {
-		return
-	}
-	err := conn.WriteJSON(message)
-	if err != nil {
-		log.Default().Println(err)
+	for {
+		message, open := <-messages
+		if !open {
+			return
+		}
+		err := conn.WriteJSON(message)
+		if err != nil {
+			log.Default().Println(err)
+		}
 	}
 }
 
@@ -25,6 +27,12 @@ type router struct {
 	channels     map[string]chan Message
 	channelsLock sync.RWMutex
 	upgrader     websocket.Upgrader
+}
+
+func newRouter() *router {
+	var router router
+	router.channels = make(map[string]chan Message)
+	return &router
 }
 
 func (router *router) setChannel(id crypto.IdentityPub, ch chan Message) {
@@ -53,7 +61,7 @@ func (router *router) listen(id crypto.IdentityPub, conn *websocket.Conn) error 
 	go forwardMessages(ch, conn)
 	for {
 		var message Message
-		err := conn.ReadJSON(message)
+		err := conn.ReadJSON(&message)
 		if err != nil {
 			log.Default().Println(err)
 			continue

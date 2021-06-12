@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/cronokirby/nuntius/internal/client"
@@ -156,9 +159,23 @@ func (cmd *ChatCommand) Run(database string) error {
 	if err != nil {
 		return fmt.Errorf("couldn't lookup friend %s: %w", cmd.Name, err)
 	}
-	fmt.Printf("%s:\n", cmd.Name)
-	fmt.Println(friendPub)
-	return nil
+	api := client.NewClientAPI(cmd.URL)
+	in := make(chan string)
+	out, err := client.StartChat(api, pub, friendPub, in)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Connected.")
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			input, _ := reader.ReadString('\n')
+			in <- strings.TrimSuffix(input, "\n")
+		}
+	}()
+	for {
+		fmt.Printf("%s> %s\n", cmd.Name, <-out)
+	}
 }
 
 var cli struct {

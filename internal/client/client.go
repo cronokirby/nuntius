@@ -386,3 +386,28 @@ func (api *httpClientAPI) Listen(id crypto.IdentityPub, in <-chan server.Message
 	}()
 	return out, nil
 }
+
+func StartChat(api ClientAPI, me crypto.IdentityPub, them crypto.IdentityPub, in <-chan string) (<-chan string, error) {
+	inMessage := make(chan server.Message)
+	outMessage, err := api.Listen(me, inMessage)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			stringMsg := <-in
+			inMessage <- server.Message{From: me, To: them, Payload: stringMsg}
+		}
+	}()
+	out := make(chan string)
+	go func() {
+		for {
+			msg := <-outMessage
+			if !bytes.Equal(msg.From, them) {
+				continue
+			}
+			out <- msg.Payload
+		}
+	}()
+	return out, nil
+}
