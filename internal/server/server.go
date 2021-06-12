@@ -243,12 +243,14 @@ func Run(database string, port int) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	var router router
 	r := mux.NewRouter()
 
 	r.HandleFunc("/prekey/{id}", server.prekeyHandler).Methods("POST")
 	r.HandleFunc("/onetime/{id}", server.onetimeHandler).Methods("POST")
 	r.HandleFunc("/onetime/count/{id}", server.onetimeCountHandler).Methods("GET")
 	r.HandleFunc("/session/{id}", server.sessionHandler).Methods("POST")
+	r.HandleFunc("/rtc/{id}", router.rtcHandler)
 
 	srv := &http.Server{
 		Handler:      r,

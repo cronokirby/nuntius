@@ -2,13 +2,15 @@ package server
 
 import (
 	"log"
+	"net/http"
 	"sync"
 
 	"github.com/cronokirby/nuntius/internal/crypto"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
 
-func forwardMessages(messages <-chan Message, conn websocket.Conn) {
+func forwardMessages(messages <-chan Message, conn *websocket.Conn) {
 	message, closed := <-messages
 	if closed {
 		return
@@ -44,7 +46,7 @@ func (router *router) removeChannel(id crypto.IdentityPub) {
 	delete(router.channels, string(id))
 }
 
-func (router *router) listen(id crypto.IdentityPub, conn websocket.Conn) error {
+func (router *router) listen(id crypto.IdentityPub, conn *websocket.Conn) error {
 	ch := make(chan Message)
 	router.setChannel(id, ch)
 	defer router.removeChannel(id)
@@ -68,5 +70,24 @@ func (router *router) listen(id crypto.IdentityPub, conn websocket.Conn) error {
 			continue
 		}
 		toChan <- message
+	}
+}
+
+func (router *router) rtcHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := crypto.IdentityPubFromBase64(vars["id"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	conn, err := router.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = router.listen(id, conn)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }
