@@ -7,13 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/user"
 	"path"
+	"strings"
 
 	"github.com/cronokirby/nuntius/internal/crypto"
 	"github.com/cronokirby/nuntius/internal/server"
+	"github.com/gorilla/websocket"
 )
 
 // ClientStore represents a store for information local to the client application.
@@ -195,6 +199,13 @@ type ClientAPI interface {
 	SendBundle(crypto.IdentityPub, crypto.BundlePub, crypto.Signature) error
 	// CreateSession accesses a new set of exchange keys for a session
 	CreateSession(crypto.IdentityPub) (crypto.ExchangePub, crypto.Signature, crypto.ExchangePub, error)
+	// Listen starts listening to messages directed towards your public identity
+	//
+	// This will spawn necssary goroutines to maintain the connection.
+	//
+	// This takes in a channel which will forward messages you want to send, and returns
+	// a channel for receiving incoming messages
+	Listen(crypto.IdentityPub, <-chan server.Message) (<-chan server.Message, error)
 }
 
 func NewClientAPI(url string) ClientAPI {
@@ -341,4 +352,37 @@ func CreateNewBundleIfNecessary(api ClientAPI, store ClientStore, pub crypto.Ide
 		return false, err
 	}
 	return true, nil
+}
+
+func (api *httpClientAPI) Listen(id crypto.IdentityPub, in <-chan server.Message) (<-chan server.Message, error) {
+	wsRoot := strings.TrimPrefix(api.root, "http://")
+	idBase64 := base64.URLEncoding.EncodeToString(id)
+	dialUrl := url.URL{Scheme: "ws", Host: wsRoot, Path: fmt.Sprintf("/rtc/%s", idBase64)}
+	conn, _, err := websocket.DefaultDialer.Dial(dialUrl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			msg := <-in
+			err := conn.WriteJSON(msg)
+			if err != nil {
+				log.Default().Println(err)
+				continue
+			}
+		}
+	}()
+	out := make(chan server.Message)
+	go func() {
+		for {
+			var msg server.Message
+			err := conn.ReadJSON(&msg)
+			if err != nil {
+				log.Default().Println(err)
+				continue
+			}
+			out <- msg
+		}
+	}()
+	return out, nil
 }
