@@ -29,6 +29,8 @@ type ClientStore interface {
 	SaveIdentity(crypto.IdentityPub, crypto.IdentityPriv) error
 	// AddFriend registers a friend by identity, and name
 	AddFriend(crypto.IdentityPub, string) error
+	// GetFriend looks up a friend's identity key, using their name
+	GetFriend(string) (crypto.IdentityPub, error)
 	// SavePrekey saves a full prekey pair, possibly failing
 	SavePrekey(crypto.ExchangePub, crypto.ExchangePriv) error
 	// SaveBundle saves the public and private parts of a bundle, possibly failing
@@ -129,6 +131,15 @@ func (store *clientDatabase) AddFriend(pub crypto.IdentityPub, name string) erro
 	VALUES ($1, $2);
 	`, pub, name)
 	return err
+}
+
+func (store *clientDatabase) GetFriend(name string) (crypto.IdentityPub, error) {
+	var pub crypto.IdentityPub
+	err := store.QueryRow("SELECT public FROM friend WHERE name = $1", name).Scan(&pub)
+	if err != nil {
+		return nil, err
+	}
+	return pub, nil
 }
 
 func (store *clientDatabase) SavePrekey(pub crypto.ExchangePub, priv crypto.ExchangePriv) error {

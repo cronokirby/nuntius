@@ -132,7 +132,8 @@ func (cmd *ServerCommand) Run(database string) error {
 }
 
 type ChatCommand struct {
-	URL string `arg help:"The URL used to access this server"`
+	URL  string `arg help:"The URL used to access this server"`
+	Name string `arg help:"The name of the friend to chat with"`
 }
 
 func (cmd *ChatCommand) Run(database string) error {
@@ -151,14 +152,12 @@ func (cmd *ChatCommand) Run(database string) error {
 		return nil
 	}
 
-	api := client.NewClientAPI(cmd.URL)
-	prekey, sig, onetime, err := api.CreateSession(pub)
+	friendPub, err := store.GetFriend(cmd.Name)
 	if err != nil {
-		return err
+		return fmt.Errorf("couldn't lookup friend %s: %w", cmd.Name, err)
 	}
-	fmt.Println("Prekey:", hex.EncodeToString(prekey))
-	fmt.Println("Sig:", hex.EncodeToString(sig))
-	fmt.Println("Onetime:", hex.EncodeToString(onetime))
+	fmt.Printf("%s:\n", cmd.Name)
+	fmt.Println(friendPub)
 	return nil
 }
 
