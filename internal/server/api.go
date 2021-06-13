@@ -23,5 +23,5 @@ type SessionResponse struct {
 type Message struct {
 	From    []byte `json:"from"`
 	To      []byte `json:"to"`
-	Payload string `json:"payload"`
+	Payload []byte `json:"payload"`
 }
