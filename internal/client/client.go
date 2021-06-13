@@ -396,7 +396,13 @@ func StartChat(api ClientAPI, me crypto.IdentityPub, them crypto.IdentityPub, in
 	go func() {
 		for {
 			stringMsg := <-in
-			inMessage <- server.Message{From: me, To: them, Payload: []byte(stringMsg)}
+			inMessage <- server.Message{
+				From: me,
+				To:   them,
+				Payload: server.Payload{
+					Variant: &server.MessagePayload{Data: []byte(stringMsg)},
+				},
+			}
 		}
 	}()
 	out := make(chan string)
@@ -406,7 +412,10 @@ func StartChat(api ClientAPI, me crypto.IdentityPub, them crypto.IdentityPub, in
 			if !bytes.Equal(msg.From, them) {
 				continue
 			}
-			out <- string(msg.Payload)
+			switch v := msg.Payload.Variant.(type) {
+			case *server.MessagePayload:
+				out <- string(v.Data)
+			}
 		}
 	}()
 	return out, nil
