@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
@@ -339,7 +340,7 @@ func BackwardExchange(params *BackwardExchangeParams) (SharedSecret, error) {
 		copy(secret[3*ExchangeSecretSize:], dh4)
 	}
 
-	kdf := hkdf.New(sha512.New, secret, nil, exchangeInfo)
+	kdf := hkdf.New(sha256.New, secret, nil, exchangeInfo)
 	out := make([]byte, SharedSecretSize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
