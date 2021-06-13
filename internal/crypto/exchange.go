@@ -212,8 +212,8 @@ func (pub IdentityPub) VerifyBundle(bundle BundlePub, sig Signature) bool {
 	return pub.Verify(bundle, sig)
 }
 
-// SharedSecret is derived between two parties, exchanging only public information
-type SharedSecret []byte
+// SharedKey is derived between two parties, exchanging only public information
+type SharedKey []byte
 
 // SharedSecretSize is the number of bytes in a shared secret
 const SharedSecretSize = 32
@@ -238,7 +238,7 @@ var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
 //
 // This exchange is used by an initiator, with their private information, to derive
 // a shared secret with a recipient, using their public information.
-func ForwardExchange(params *ForwardExchangeParams) (SharedSecret, error) {
+func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
 	meX := params.me.toExchange()
 	idX, err := params.identity.toExchange()
 	if err != nil {
@@ -303,7 +303,7 @@ type BackwardExchangeParams struct {
 // This is the corollary to ForwardExchange, allow the recipient to derive a shared
 // secret with an initiator. This is done with the recipient's private information,
 // and the initiator's public information.
-func BackwardExchange(params *BackwardExchangeParams) (SharedSecret, error) {
+func BackwardExchange(params *BackwardExchangeParams) (SharedKey, error) {
 	themX, err := params.them.toExchange()
 	if err != nil {
 		return nil, err
