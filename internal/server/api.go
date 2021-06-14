@@ -40,7 +40,6 @@ func (payload Payload) MarshalJSON() ([]byte, error) {
 }
 
 type MessagePayload struct {
-	Type string `json:"type"`
 	Data []byte `json:"data"`
 }
 
