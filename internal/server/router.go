@@ -27,11 +27,13 @@ type router struct {
 	channels     map[string]chan Message
 	channelsLock sync.RWMutex
 	upgrader     websocket.Upgrader
+	server       *server
 }
 
-func newRouter() *router {
+func newRouter(server *server) *router {
 	var router router
 	router.channels = make(map[string]chan Message)
+	router.server = server
 	return &router
 }
 
@@ -66,18 +68,38 @@ func (router *router) listen(id crypto.IdentityPub, conn *websocket.Conn) error 
 			log.Default().Println(err)
 			continue
 		}
-		message.From = id
 		if len(message.To) != crypto.IdentityPubSize {
 			log.Default().Printf("incorrect recipient identity len: %d\n", len(message.To))
 			continue
 		}
 		idTo := crypto.IdentityPub(message.To)
 		toChan, present := router.getChannel(idTo)
-		if !present {
-			log.Default().Printf("recipient %s is not connected\n", idTo)
-			continue
+		switch message.Payload.Variant.(type) {
+		case *QueryExchangePayload:
+			if !present {
+				continue
+			}
+			prekey, sig, err := router.server.getPrekey(idTo)
+			if err != nil {
+				log.Default().Println(err)
+				continue
+			}
+			onetime, err := router.server.getOnetime(idTo)
+			if err != nil {
+				log.Default().Println(err)
+				continue
+			}
+			ch <- Message{From: nil, To: id, Payload: Payload{
+				Variant: &StartExchangePayload{
+					Prekey:  prekey,
+					Sig:     sig,
+					OneTime: onetime,
+				},
+			}}
+		default:
+			message.From = id
+			toChan <- message
 		}
-		toChan <- message
 	}
 }
 

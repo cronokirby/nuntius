@@ -243,7 +243,7 @@ func Run(database string, port int) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	router := newRouter()
+	router := newRouter(server)
 	r := mux.NewRouter()
 
 	r.HandleFunc("/prekey/{id}", server.prekeyHandler).Methods("POST")
