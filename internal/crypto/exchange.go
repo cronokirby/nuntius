@@ -274,7 +274,7 @@ func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
 		copy(secret[3*ExchangeSecretSize:], dh4)
 	}
 
-	kdf := hkdf.New(sha512.New, secret, nil, exchangeInfo)
+	kdf := hkdf.New(sha256.New, secret, nil, exchangeInfo)
 	out := make([]byte, SharedKeySize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
