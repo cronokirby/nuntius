@@ -215,8 +215,8 @@ func (pub IdentityPub) VerifyBundle(bundle BundlePub, sig Signature) bool {
 // SharedKey is derived between two parties, exchanging only public information
 type SharedKey []byte
 
-// SharedSecretSize is the number of bytes in a shared secret
-const SharedSecretSize = 32
+// SharedKeySize is the number of bytes in a shared secret
+const SharedKeySize = 32
 
 // ForwardExchangeParams is the information to do an exchange, from a person initiating the exchange
 type ForwardExchangeParams struct {
@@ -275,7 +275,7 @@ func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
 	}
 
 	kdf := hkdf.New(sha512.New, secret, nil, exchangeInfo)
-	out := make([]byte, SharedSecretSize)
+	out := make([]byte, SharedKeySize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
 		return nil, err
@@ -341,7 +341,7 @@ func BackwardExchange(params *BackwardExchangeParams) (SharedKey, error) {
 	}
 
 	kdf := hkdf.New(sha256.New, secret, nil, exchangeInfo)
-	out := make([]byte, SharedSecretSize)
+	out := make([]byte, SharedKeySize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
 		return nil, err
