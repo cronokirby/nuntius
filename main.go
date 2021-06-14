@@ -145,7 +145,7 @@ func (cmd *ChatCommand) Run(database string) error {
 		return fmt.Errorf("couldn't connect to database: %w", err)
 	}
 
-	pub, err := store.GetIdentity()
+	pub, priv, err := store.GetFullIdentity()
 	if err != nil {
 		return err
 	}
@@ -159,9 +159,18 @@ func (cmd *ChatCommand) Run(database string) error {
 	if err != nil {
 		return fmt.Errorf("couldn't lookup friend %s: %w", cmd.Name, err)
 	}
+
 	api := client.NewClientAPI(cmd.URL)
+	newBundle, err := client.CreateNewBundleIfNecessary(api, store, pub, priv)
+	if err != nil {
+		return err
+	}
+	if newBundle {
+		fmt.Println("New bundle created.")
+	}
+
 	in := make(chan string)
-	out, err := client.StartChat(api, pub, friendPub, in)
+	out, err := client.StartChat(api, store, pub, priv, friendPub, in)
 	if err != nil {
 		return err
 	}

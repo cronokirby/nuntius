@@ -39,6 +39,10 @@ type ClientStore interface {
 	SavePrekey(crypto.ExchangePub, crypto.ExchangePriv) error
 	// SaveBundle saves the public and private parts of a bundle, possibly failing
 	SaveBundle(crypto.BundlePub, crypto.BundlePriv) error
+	// GetPreKey retrieves the private part of a prekey
+	GetPrekey(crypto.ExchangePub) (crypto.ExchangePriv, error)
+	// BurnOneTime retrieves a one time key, also deleting it
+	BurnOnetime(crypto.ExchangePub) (crypto.ExchangePriv, error)
 }
 
 // This will be the path after the Home directory where we put our SQLite database.
@@ -174,6 +178,37 @@ func (store *clientDatabase) SaveBundle(pub crypto.BundlePub, priv crypto.Bundle
 		}
 	}
 	return tx.Commit()
+}
+
+func (store *clientDatabase) GetPrekey(prekey crypto.ExchangePub) (crypto.ExchangePriv, error) {
+	var priv crypto.ExchangePriv
+	err := store.QueryRow("SELECT private FROM prekey WHERE public = $1;", prekey).Scan(&priv)
+	if err != nil {
+		return nil, err
+	}
+	return priv, nil
+}
+
+func (store *clientDatabase) BurnOnetime(pub crypto.ExchangePub) (crypto.ExchangePriv, error) {
+	tx, err := store.Begin()
+	if err != nil {
+		return nil, err
+	}
+	var priv crypto.ExchangePriv
+	err = tx.QueryRow(`
+	SELECT private FROM onetime WHERE public = $1 LIMIT 1;
+	`, pub).Scan(&priv)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	_, err = tx.Exec("DELETE FROM onetime WHERE public = $1;", pub)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	tx.Commit()
+	return priv, nil
 }
 
 // NewStore creates a new ClientStore given a path to a local database.
@@ -387,20 +422,116 @@ func (api *httpClientAPI) Listen(id crypto.IdentityPub, in <-chan server.Message
 	return out, nil
 }
 
-func StartChat(api ClientAPI, me crypto.IdentityPub, them crypto.IdentityPub, in <-chan string) (<-chan string, error) {
+func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv crypto.IdentityPriv, them crypto.IdentityPub, in <-chan string) (<-chan string, error) {
 	inMessage := make(chan server.Message)
 	outMessage, err := api.Listen(me, inMessage)
 	if err != nil {
 		return nil, err
 	}
+	inMessage <- server.Message{
+		From: me,
+		To:   them,
+		Payload: server.Payload{
+			Variant: &server.QueryExchangePayload{},
+		},
+	}
+	var additional []byte
+	msg := <-outMessage
+	var key crypto.SharedKey
+	switch v := msg.Payload.Variant.(type) {
+	case *server.StartExchangePayload:
+		additional = append(additional, me...)
+		additional = append(additional, them...)
+
+		prekey, err := crypto.ExchangePubFromBytes(v.Prekey)
+		if err != nil {
+			return nil, err
+		}
+		if !them.Verify(v.Prekey, v.Sig) {
+			return nil, errors.New("couldn't verify prekey signature")
+		}
+		onetime, err := crypto.ExchangePubFromBytes(v.OneTime)
+		if err != nil {
+			return nil, err
+		}
+		ephemeralPub, ephemeralPriv, err := crypto.GenerateExchange()
+		if err != nil {
+			return nil, err
+		}
+		key, err = crypto.ForwardExchange(&crypto.ForwardExchangeParams{
+			Me:        myPriv,
+			Ephemeral: ephemeralPriv,
+			Identity:  them,
+			Prekey:    prekey,
+			OneTime:   onetime,
+		})
+		if err != nil {
+			return nil, err
+		}
+		inMessage <- server.Message{
+			From: me,
+			To:   them,
+			Payload: server.Payload{
+				Variant: &server.EndExchangePayload{
+					Prekey:    prekey,
+					OneTime:   onetime,
+					Ephemeral: ephemeralPub,
+				},
+			},
+		}
+	case *server.EndExchangePayload:
+		additional = append(additional, them...)
+		additional = append(additional, me...)
+
+		ephemeral, err := crypto.ExchangePubFromBytes(v.Ephemeral)
+		if err != nil {
+			return nil, err
+		}
+
+		prekey, err := crypto.ExchangePubFromBytes(v.Prekey)
+		if err != nil {
+			return nil, err
+		}
+
+		onetime, err := crypto.ExchangePubFromBytes(v.OneTime)
+		if err != nil {
+			return nil, err
+		}
+
+		prekeyPriv, err := store.GetPrekey(prekey)
+		if err != nil {
+			return nil, err
+		}
+
+		onetimePriv, err := store.BurnOnetime(onetime)
+		if err != nil {
+			return nil, err
+		}
+
+		key, err = crypto.BackwardExchange(&crypto.BackwardExchangeParams{
+			Them:      them,
+			Ephemeral: ephemeral,
+			Identity:  myPriv,
+			Prekey:    prekeyPriv,
+			OneTime:   onetimePriv,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	go func() {
 		for {
 			stringMsg := <-in
+			ciphertext, err := key.Encrypt([]byte(stringMsg), additional)
+			if err != nil {
+				log.Default().Println(err)
+				continue
+			}
 			inMessage <- server.Message{
 				From: me,
 				To:   them,
 				Payload: server.Payload{
-					Variant: &server.MessagePayload{Data: []byte(stringMsg)},
+					Variant: &server.MessagePayload{Data: ciphertext},
 				},
 			}
 		}
@@ -414,7 +545,12 @@ func StartChat(api ClientAPI, me crypto.IdentityPub, them crypto.IdentityPub, in
 			}
 			switch v := msg.Payload.Variant.(type) {
 			case *server.MessagePayload:
-				out <- string(v.Data)
+				plaintext, err := key.Decrypt(v.Data, additional)
+				if err != nil {
+					log.Default().Println(err)
+					continue
+				}
+				out <- string(plaintext)
 			}
 		}
 	}()

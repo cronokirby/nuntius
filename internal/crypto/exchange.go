@@ -221,15 +221,15 @@ const SharedKeySize = 32
 // ForwardExchangeParams is the information to do an exchange, from a person initiating the exchange
 type ForwardExchangeParams struct {
 	// The private identity key for the initiator
-	me IdentityPriv
-	// The private part of an ephemeral exchange key
-	ephemeral ExchangePriv
-	// The public identity key for the recipient
-	identity IdentityPub
-	// The signed prekey for the recipient
-	prekey ExchangePub
-	// The onetime key for the recipient
-	onetime ExchangePub
+	Me IdentityPriv
+	// The private part of an Ephemeral exchange key
+	Ephemeral ExchangePriv
+	// The public Identity key for the recipient
+	Identity IdentityPub
+	// The signed Prekey for the recipient
+	Prekey ExchangePub
+	// The OneTime key for the recipient
+	OneTime ExchangePub
 }
 
 var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
@@ -239,35 +239,35 @@ var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
 // This exchange is used by an initiator, with their private information, to derive
 // a shared secret with a recipient, using their public information.
 func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
-	meX := params.me.toExchange()
-	idX, err := params.identity.toExchange()
+	meX := params.Me.toExchange()
+	idX, err := params.Identity.toExchange()
 	if err != nil {
 		return nil, err
 	}
 	secret := make([]byte, ExchangeSecretSize*4)
 
-	dh1, err := meX.exchange(params.prekey)
+	dh1, err := meX.exchange(params.Prekey)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret, dh1)
 
-	dh2, err := params.ephemeral.exchange(idX)
+	dh2, err := params.Ephemeral.exchange(idX)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret[ExchangeSecretSize:], dh2)
 
-	dh3, err := params.ephemeral.exchange(params.prekey)
+	dh3, err := params.Ephemeral.exchange(params.Prekey)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret[2*ExchangeSecretSize:], dh3)
 
-	if params.onetime == nil {
+	if params.OneTime == nil {
 		secret = secret[:3*ExchangeSecretSize]
 	} else {
-		dh4, err := params.ephemeral.exchange(params.onetime)
+		dh4, err := params.Ephemeral.exchange(params.OneTime)
 		if err != nil {
 			return nil, err
 		}
@@ -287,15 +287,15 @@ func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
 // BackwardExchangeParams contains the parameters for an exchange from a recipient
 type BackwardExchangeParams struct {
 	// The public identity of the initiator
-	them IdentityPub
-	// The ephemeral key used by the initiator
-	ephemeral ExchangePub
-	// The private identity of the recipient
-	identity IdentityPriv
-	// The private prekey of the recipient
-	prekey ExchangePriv
-	// The private onetime key of the recipient
-	onetime ExchangePriv
+	Them IdentityPub
+	// The Ephemeral key used by the initiator
+	Ephemeral ExchangePub
+	// The private Identity of the recipient
+	Identity IdentityPriv
+	// The private Prekey of the recipient
+	Prekey ExchangePriv
+	// The private OneTime key of the recipient
+	OneTime ExchangePriv
 }
 
 // BackwardExchange derives a shared secret, using the initiators public information
@@ -304,36 +304,36 @@ type BackwardExchangeParams struct {
 // secret with an initiator. This is done with the recipient's private information,
 // and the initiator's public information.
 func BackwardExchange(params *BackwardExchangeParams) (SharedKey, error) {
-	themX, err := params.them.toExchange()
+	themX, err := params.Them.toExchange()
 	if err != nil {
 		return nil, err
 	}
-	idX := params.identity.toExchange()
+	idX := params.Identity.toExchange()
 
 	secret := make([]byte, ExchangeSecretSize*4)
 
-	dh1, err := params.prekey.exchange(themX)
+	dh1, err := params.Prekey.exchange(themX)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret, dh1)
 
-	dh2, err := idX.exchange(params.ephemeral)
+	dh2, err := idX.exchange(params.Ephemeral)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret[ExchangeSecretSize:], dh2)
 
-	dh3, err := params.prekey.exchange(params.ephemeral)
+	dh3, err := params.Prekey.exchange(params.Ephemeral)
 	if err != nil {
 		return nil, err
 	}
 	copy(secret[2*ExchangeSecretSize:], dh3)
 
-	if params.onetime == nil {
+	if params.OneTime == nil {
 		secret = secret[:3*ExchangeSecretSize]
 	} else {
-		dh4, err := params.onetime.exchange(params.ephemeral)
+		dh4, err := params.OneTime.exchange(params.Ephemeral)
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -68,6 +70,8 @@ func (router *router) listen(id crypto.IdentityPub, conn *websocket.Conn) error 
 			log.Default().Println(err)
 			continue
 		}
+		data, _ := json.Marshal(message)
+		fmt.Println(string(data))
 		if len(message.To) != crypto.IdentityPubSize {
 			log.Default().Printf("incorrect recipient identity len: %d\n", len(message.To))
 			continue
@@ -84,11 +88,13 @@ func (router *router) listen(id crypto.IdentityPub, conn *websocket.Conn) error 
 				log.Default().Println(err)
 				continue
 			}
+			fmt.Println("prekey", prekey)
 			onetime, err := router.server.getOnetime(idTo)
 			if err != nil {
 				log.Default().Println(err)
 				continue
 			}
+			fmt.Println("onetime", onetime)
 			ch <- Message{From: nil, To: id, Payload: Payload{
 				Variant: &StartExchangePayload{
 					Prekey:  prekey,
