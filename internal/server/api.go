@@ -54,6 +54,19 @@ func (payload *MessagePayload) MarshalJSON() ([]byte, error) {
 	})
 }
 
+type QueryExchangePayload struct{}
+
+func (payload *QueryExchangePayload) MarshalJSON() ([]byte, error) {
+	type Alias QueryExchangePayload
+	return json.Marshal(&struct {
+		Type string `json:"type"`
+		*Alias
+	}{
+		Type:  "query_exchange",
+		Alias: (*Alias)(payload),
+	})
+}
+
 type StartExchangePayload struct {
 	Prekey  []byte `json:"prekey"`
 	Sig     []byte `json:"sig"`
@@ -98,6 +111,8 @@ func (payload *Payload) UnmarshalJSON(data []byte) error {
 	switch typ.Type {
 	case "message":
 		payload.Variant = new(MessagePayload)
+	case "query_exchange":
+		payload.Variant = new(QueryExchangePayload)
 	case "start_exchange":
 		payload.Variant = new(StartExchangePayload)
 	case "end_exchange":
