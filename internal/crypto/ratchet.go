@@ -77,6 +77,18 @@ func kdfChainKey(ck chainKey) (chainKey, MessageKey, error) {
 // This will be setup based on the exchange to derive a secret, and then
 // updated as messages arrive.
 type DoubleRatchet struct {
+	// sendingPub is our current exchange public key
+	sendingPub ExchangePub
+	// sendingPriv is our current exchange private key
+	sendingPriv ExchangePriv
+	// receivingPub is our correspondant's current public key
+	receivingPub ExchangePub
+	// rootKey is the current rootKey for the main ratchet
+	rootKey rootKey
+	// sendingKey is the current chain key for the sending ratchet
+	sendingKey chainKey
+	// receivingKey is the current chain key for the receiving ratchet
+	receivingKey chainKey
 }
 
 // Encrypt uses the current state of the ratchet to encrypt a piece of data.
