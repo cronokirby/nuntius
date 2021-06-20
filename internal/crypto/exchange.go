@@ -26,6 +26,9 @@ type ExchangePub []byte
 // ExchangePriv is the private component of an exchange key
 type ExchangePriv []byte
 
+// ExchangedSecret is the result of exchanging between key pairs
+type exchangedSecret []byte
+
 // GenerateExchange creates a new exchange key-pair
 //
 // This will use a secure source of randomness.
@@ -56,7 +59,7 @@ func ExchangePubFromBytes(pubBytes []byte) (ExchangePub, error) {
 	return ExchangePub(pubBytes), nil
 }
 
-func (priv ExchangePriv) exchange(pub ExchangePub) ([]byte, error) {
+func (priv ExchangePriv) exchange(pub ExchangePub) (exchangedSecret, error) {
 	return curve25519.X25519(priv, pub)
 }
 
