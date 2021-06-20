@@ -71,3 +71,24 @@ func kdfChainKey(ck chainKey) (chainKey, MessageKey, error) {
 
 	return ck, mk, nil
 }
+
+// DoubleRatchet holds the state used for the Diffie Hellman double ratchet.
+//
+// This will be setup based on the exchange to derive a secret, and then
+// updated as messages arrive.
+type DoubleRatchet struct {
+}
+
+// Encrypt uses the current state of the ratchet to encrypt a piece of data.
+func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, error) {
+	panic("not implemented yet")
+}
+
+// Decrypt uses the current state of the ratchet to decrypt a piece of data.
+//
+// The ciphertext will contain the necessary headers.
+//
+// This will also advance the state of the ratchet accordingly.
+func (ratchet *DoubleRatchet) Decrypt(ciphertext, additional []byte) ([]byte, error) {
+	panic("not implemented yet")
+}
