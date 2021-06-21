@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
@@ -103,14 +104,11 @@ func DoubleRatchetFromInitiator(secret SharedSecret, receivingPub ExchangePub) (
 	if err != nil {
 		return ratchet, err
 	}
-	/*
-		exchanged, err := ratchet.sendingPriv.exchange(receivingPub)
-		if err != nil {
-			return ratchet, err
-		}
-		ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(rootKey(secret), exchanged)
-	*/
-	ratchet.rootKey = rootKey(secret)
+	exchanged, err := ratchet.sendingPriv.exchange(receivingPub)
+	if err != nil {
+		return ratchet, err
+	}
+	ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(rootKey(secret), exchanged)
 	if err != nil {
 		return ratchet, err
 	}
@@ -137,17 +135,15 @@ func concat(a, b []byte) []byte {
 
 // Encrypt uses the current state of the ratchet to encrypt a piece of data.
 func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, error) {
-	/*
-		newSendingKey, messageKey, err := kdfChainKey(ratchet.sendingKey)
-		if err != nil {
-			return nil, err
-		}
-		ratchet.sendingKey = newSendingKey
-	*/
+	newSendingKey, messageKey, err := kdfChainKey(ratchet.sendingKey)
+	if err != nil {
+		return nil, err
+	}
+	ratchet.sendingKey = newSendingKey
 
 	header := []byte(ratchet.sendingPub)
 
-	ciphertext, err := MessageKey(ratchet.rootKey).Encrypt(plaintext, concat(header, additional))
+	ciphertext, err := messageKey.Encrypt(plaintext, concat(header, additional))
 	if err != nil {
 		return nil, err
 	}
@@ -164,8 +160,37 @@ func (ratchet *DoubleRatchet) Decrypt(ciphertext, additional []byte) ([]byte, er
 		return nil, errors.New("ciphertext does not contain public key")
 	}
 	header := ciphertext[:ExchangePubSize]
+	attachedPub := ExchangePub(header[:ExchangePubSize])
+	if !bytes.Equal(attachedPub, ratchet.receivingPub) {
+		ratchet.receivingPub = attachedPub
+		receivingExchange, err := ratchet.sendingPriv.exchange(ratchet.receivingPub)
+		if err != nil {
+			return nil, err
+		}
+		ratchet.rootKey, ratchet.receivingKey, err = kdfRootKey(ratchet.rootKey, receivingExchange)
+		if err != nil {
+			return nil, err
+		}
+		ratchet.sendingPub, ratchet.sendingPriv, err = GenerateExchange()
+		if err != nil {
+			return nil, err
+		}
+		sendingExchange, err := ratchet.sendingPriv.exchange(ratchet.receivingPub)
+		if err != nil {
+			return nil, err
+		}
+		ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(ratchet.rootKey, sendingExchange)
+		if err != nil {
+			return nil, err
+		}
+	}
 	ciphertext = ciphertext[ExchangePubSize:]
-	plaintext, err := MessageKey(ratchet.rootKey).Decrypt(ciphertext, concat(header, additional))
+	newReceivingKey, messageKey, err := kdfChainKey(ratchet.receivingKey)
+	if err != nil {
+		return nil, err
+	}
+	ratchet.receivingKey = newReceivingKey
+	plaintext, err := MessageKey(messageKey).Decrypt(ciphertext, concat(header, additional))
 	if err != nil {
 		return nil, err
 	}
