@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 )
 

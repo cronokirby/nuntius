@@ -103,12 +103,14 @@ func DoubleRatchetFromInitiator(secret SharedSecret, receivingPub ExchangePub) (
 	if err != nil {
 		return ratchet, err
 	}
-	exchanged, err := ratchet.sendingPriv.exchange(receivingPub)
-	if err != nil {
-		return ratchet, err
-	}
-	rootKey := rootKey(secret)
-	ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(rootKey, exchanged)
+	/*
+		exchanged, err := ratchet.sendingPriv.exchange(receivingPub)
+		if err != nil {
+			return ratchet, err
+		}
+	*/
+	ratchet.rootKey = rootKey(secret)
+	//ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(rootKey, exchanged)
 	if err != nil {
 		return ratchet, err
 	}
@@ -128,9 +130,18 @@ func DoubleRatchetFromReceiver(secret SharedSecret, pub ExchangePub, priv Exchan
 
 // Encrypt uses the current state of the ratchet to encrypt a piece of data.
 func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, error) {
-	ciphertext := ratchet.sendingPub[:]
-	ciphertext = append(ciphertext, plaintext...)
-	return ciphertext, nil
+	header := []byte(ratchet.sendingPub)
+	fullAdditional := make([]byte, 0, len(additional)+len(header))
+	fullAdditional = append(fullAdditional, header...)
+	fullAdditional = append(fullAdditional, additional...)
+	ciphertext, err := MessageKey(ratchet.rootKey).Encrypt(plaintext, fullAdditional)
+	if err != nil {
+		return nil, err
+	}
+	fullCiphertext := make([]byte, 0, len(ciphertext)+ExchangePubSize)
+	fullCiphertext = append(fullCiphertext, header...)
+	fullCiphertext = append(fullCiphertext, ciphertext...)
+	return fullCiphertext, nil
 }
 
 // Decrypt uses the current state of the ratchet to decrypt a piece of data.
@@ -142,7 +153,14 @@ func (ratchet *DoubleRatchet) Decrypt(ciphertext, additional []byte) ([]byte, er
 	if len(ciphertext) < ExchangePubSize {
 		return nil, errors.New("ciphertext does not contain public key")
 	}
-	//attachedPub := ciphertext[:ExchangePubSize]
+	header := ciphertext[:ExchangePubSize]
 	ciphertext = ciphertext[ExchangePubSize:]
-	return ciphertext, nil
+	fullAdditional := make([]byte, 0, len(additional)+ExchangePubSize)
+	fullAdditional = append(fullAdditional, header...)
+	fullAdditional = append(fullAdditional, additional...)
+	plaintext, err := MessageKey(ratchet.rootKey).Decrypt(ciphertext, fullAdditional)
+	if err != nil {
+		return nil, err
+	}
+	return plaintext, nil
 }
