@@ -91,6 +91,11 @@ type DoubleRatchet struct {
 	receivingKey chainKey
 }
 
+// DoubleRatchetFromInitiator creates a double ratchet, with information by the initiator of an exchange.
+//
+// The parameters passed by this function should be known to the initiator of an X3DH exchange.
+//
+// The receivingPub should be the signed prekey.
 func DoubleRatchetFromInitiator(secret SharedSecret, receivingPub ExchangePub) (ratchet DoubleRatchet, err error) {
 	ratchet.receivingPub = receivingPub
 	ratchet.sendingPub, ratchet.sendingPriv, err = GenerateExchange()
@@ -109,6 +114,9 @@ func DoubleRatchetFromInitiator(secret SharedSecret, receivingPub ExchangePub) (
 	return ratchet, nil
 }
 
+// DoubleRatchetFromReceiver creates a double ratchet, with information from the receiver of an exchange.
+//
+// We use the shared secret we've derived from an exchange, as well as our signed prekey.
 func DoubleRatchetFromReceiver(secret SharedSecret, pub ExchangePub, priv ExchangePriv) DoubleRatchet {
 	var ratchet DoubleRatchet
 	ratchet.sendingPub = pub
