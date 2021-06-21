@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-func newAEAD(key SharedSecret) (cipher.AEAD, error) {
+func newAEAD(key MessageKey) (cipher.AEAD, error) {
 	blockCipher, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -19,7 +19,7 @@ func newAEAD(key SharedSecret) (cipher.AEAD, error) {
 	return aead, nil
 }
 
-func (key SharedSecret) Encrypt(plaintext, additional []byte) ([]byte, error) {
+func (key MessageKey) Encrypt(plaintext, additional []byte) ([]byte, error) {
 	aead, err := newAEAD(key)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (key SharedSecret) Encrypt(plaintext, additional []byte) ([]byte, error) {
 	return out, nil
 }
 
-func (key SharedSecret) Decrypt(ciphertext, additional []byte) ([]byte, error) {
+func (key MessageKey) Decrypt(ciphertext, additional []byte) ([]byte, error) {
 	aead, err := newAEAD(key)
 	if err != nil {
 		return nil, err

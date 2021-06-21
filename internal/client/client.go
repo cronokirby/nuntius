@@ -437,7 +437,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 	}
 	var additional []byte
 	msg := <-outMessage
-	var key crypto.SharedSecret
+	var key crypto.MessageKey
 	switch v := msg.Payload.Variant.(type) {
 	case *server.StartExchangePayload:
 		additional = append(additional, me...)
@@ -458,13 +458,14 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 		if err != nil {
 			return nil, err
 		}
-		key, err = crypto.ForwardExchange(&crypto.ForwardExchangeParams{
+		shared, err := crypto.ForwardExchange(&crypto.ForwardExchangeParams{
 			Me:        myPriv,
 			Ephemeral: ephemeralPriv,
 			Identity:  them,
 			Prekey:    prekey,
 			OneTime:   onetime,
 		})
+		key = crypto.MessageKey(shared)
 		if err != nil {
 			return nil, err
 		}
@@ -508,7 +509,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 			return nil, err
 		}
 
-		key, err = crypto.BackwardExchange(&crypto.BackwardExchangeParams{
+		shared, err := crypto.BackwardExchange(&crypto.BackwardExchangeParams{
 			Them:      them,
 			Ephemeral: ephemeral,
 			Identity:  myPriv,
@@ -518,6 +519,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 		if err != nil {
 			return nil, err
 		}
+		key = crypto.MessageKey(shared)
 	}
 	go func() {
 		for {
