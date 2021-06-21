@@ -472,14 +472,19 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 		if err != nil {
 			return nil, err
 		}
+		initialData, err := ratchet.Encrypt(nil, additional)
+		if err != nil {
+			return nil, err
+		}
 		inMessage <- server.Message{
 			From: me,
 			To:   them,
 			Payload: server.Payload{
 				Variant: &server.EndExchangePayload{
-					Prekey:    prekey,
-					OneTime:   onetime,
-					Ephemeral: ephemeralPub,
+					Prekey:      prekey,
+					OneTime:     onetime,
+					Ephemeral:   ephemeralPub,
+					InitialData: initialData,
 				},
 			},
 		}
@@ -523,6 +528,10 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 			return nil, err
 		}
 		ratchet = crypto.DoubleRatchetFromReceiver(secret, prekey, prekeyPriv)
+		_, err = ratchet.Decrypt(v.InitialData, additional)
+		if err != nil {
+			return nil, err
+		}
 	}
 	go func() {
 		for {

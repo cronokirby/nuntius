@@ -85,9 +85,10 @@ func (payload *StartExchangePayload) MarshalJSON() ([]byte, error) {
 }
 
 type EndExchangePayload struct {
-	Prekey    []byte `json:"prekey"`
-	OneTime   []byte `json:"onetime,omitempty"`
-	Ephemeral []byte `json:"ephemeral"`
+	Prekey      []byte `json:"prekey"`
+	OneTime     []byte `json:"onetime,omitempty"`
+	Ephemeral   []byte `json:"ephemeral"`
+	InitialData []byte `json:"initial_data"`
 }
 
 func (payload *EndExchangePayload) MarshalJSON() ([]byte, error) {
