@@ -91,9 +91,35 @@ type DoubleRatchet struct {
 	receivingKey chainKey
 }
 
+func DoubleRatchetFromInitiator(secret SharedSecret, receivingPub ExchangePub) (ratchet DoubleRatchet, err error) {
+	ratchet.receivingPub = receivingPub
+	ratchet.sendingPub, ratchet.sendingPriv, err = GenerateExchange()
+	if err != nil {
+		return ratchet, err
+	}
+	exchanged, err := ratchet.sendingPriv.exchange(receivingPub)
+	if err != nil {
+		return ratchet, err
+	}
+	rootKey := rootKey(secret)
+	ratchet.rootKey, ratchet.sendingKey, err = kdfRootKey(rootKey, exchanged)
+	if err != nil {
+		return ratchet, err
+	}
+	return ratchet, nil
+}
+
+func DoubleRatchetFromReceiver(secret SharedSecret, pub ExchangePub, priv ExchangePriv) DoubleRatchet {
+	var ratchet DoubleRatchet
+	ratchet.sendingPub = pub
+	ratchet.sendingPriv = priv
+	ratchet.rootKey = rootKey(secret)
+	return ratchet
+}
+
 // Encrypt uses the current state of the ratchet to encrypt a piece of data.
 func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, error) {
-	panic("not implemented yet")
+	return plaintext, nil
 }
 
 // Decrypt uses the current state of the ratchet to decrypt a piece of data.
@@ -102,5 +128,5 @@ func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, err
 //
 // This will also advance the state of the ratchet accordingly.
 func (ratchet *DoubleRatchet) Decrypt(ciphertext, additional []byte) ([]byte, error) {
-	panic("not implemented yet")
+	return ciphertext, nil
 }

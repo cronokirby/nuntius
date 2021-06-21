@@ -215,11 +215,11 @@ func (pub IdentityPub) VerifyBundle(bundle BundlePub, sig Signature) bool {
 	return pub.Verify(bundle, sig)
 }
 
-// SharedKey is derived between two parties, exchanging only public information
-type SharedKey []byte
+// SharedSecret is derived between two parties, exchanging only public information
+type SharedSecret []byte
 
-// SharedKeySize is the number of bytes in a shared secret
-const SharedKeySize = 32
+// SharedSecretSize is the number of bytes in a shared secret
+const SharedSecretSize = 32
 
 // ForwardExchangeParams is the information to do an exchange, from a person initiating the exchange
 type ForwardExchangeParams struct {
@@ -241,7 +241,7 @@ var exchangeInfo = []byte("Nuntius X3DH KDF 2021-06-06")
 //
 // This exchange is used by an initiator, with their private information, to derive
 // a shared secret with a recipient, using their public information.
-func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
+func ForwardExchange(params *ForwardExchangeParams) (SharedSecret, error) {
 	meX := params.Me.toExchange()
 	idX, err := params.Identity.toExchange()
 	if err != nil {
@@ -278,7 +278,7 @@ func ForwardExchange(params *ForwardExchangeParams) (SharedKey, error) {
 	}
 
 	kdf := hkdf.New(sha256.New, secret, nil, exchangeInfo)
-	out := make([]byte, SharedKeySize)
+	out := make([]byte, SharedSecretSize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
 		return nil, err
@@ -306,7 +306,7 @@ type BackwardExchangeParams struct {
 // This is the corollary to ForwardExchange, allow the recipient to derive a shared
 // secret with an initiator. This is done with the recipient's private information,
 // and the initiator's public information.
-func BackwardExchange(params *BackwardExchangeParams) (SharedKey, error) {
+func BackwardExchange(params *BackwardExchangeParams) (SharedSecret, error) {
 	themX, err := params.Them.toExchange()
 	if err != nil {
 		return nil, err
@@ -344,7 +344,7 @@ func BackwardExchange(params *BackwardExchangeParams) (SharedKey, error) {
 	}
 
 	kdf := hkdf.New(sha256.New, secret, nil, exchangeInfo)
-	out := make([]byte, SharedKeySize)
+	out := make([]byte, SharedSecretSize)
 	_, err = io.ReadFull(kdf, out)
 	if err != nil {
 		return nil, err

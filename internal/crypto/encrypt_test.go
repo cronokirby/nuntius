@@ -7,13 +7,13 @@ import (
 )
 
 func TestEncryptionRoundtrip(t *testing.T) {
-	keyBytes := make([]byte, SharedKeySize)
+	keyBytes := make([]byte, SharedSecretSize)
 	_, err := rand.Read(keyBytes)
 	if err != nil {
 		t.Errorf("couldn't generate key: %v", err)
 		return
 	}
-	key := SharedKey(keyBytes)
+	key := SharedSecret(keyBytes)
 	plaintext := []byte("Hello There!")
 	additional := []byte("Additional")
 

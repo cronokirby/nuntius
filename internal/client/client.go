@@ -437,7 +437,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 	}
 	var additional []byte
 	msg := <-outMessage
-	var key crypto.SharedKey
+	var key crypto.SharedSecret
 	switch v := msg.Payload.Variant.(type) {
 	case *server.StartExchangePayload:
 		additional = append(additional, me...)
