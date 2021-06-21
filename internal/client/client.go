@@ -437,7 +437,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 	}
 	var additional []byte
 	msg := <-outMessage
-	var key crypto.MessageKey
+	var ratchet crypto.DoubleRatchet
 	switch v := msg.Payload.Variant.(type) {
 	case *server.StartExchangePayload:
 		additional = append(additional, me...)
@@ -458,14 +458,17 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 		if err != nil {
 			return nil, err
 		}
-		shared, err := crypto.ForwardExchange(&crypto.ForwardExchangeParams{
+		secret, err := crypto.ForwardExchange(&crypto.ForwardExchangeParams{
 			Me:        myPriv,
 			Ephemeral: ephemeralPriv,
 			Identity:  them,
 			Prekey:    prekey,
 			OneTime:   onetime,
 		})
-		key = crypto.MessageKey(shared)
+		if err != nil {
+			return nil, err
+		}
+		ratchet, err = crypto.DoubleRatchetFromInitiator(secret, prekey)
 		if err != nil {
 			return nil, err
 		}
@@ -509,7 +512,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 			return nil, err
 		}
 
-		shared, err := crypto.BackwardExchange(&crypto.BackwardExchangeParams{
+		secret, err := crypto.BackwardExchange(&crypto.BackwardExchangeParams{
 			Them:      them,
 			Ephemeral: ephemeral,
 			Identity:  myPriv,
@@ -519,12 +522,12 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 		if err != nil {
 			return nil, err
 		}
-		key = crypto.MessageKey(shared)
+		ratchet = crypto.DoubleRatchetFromReceiver(secret, prekey, prekeyPriv)
 	}
 	go func() {
 		for {
 			stringMsg := <-in
-			ciphertext, err := key.Encrypt([]byte(stringMsg), additional)
+			ciphertext, err := ratchet.Encrypt([]byte(stringMsg), additional)
 			if err != nil {
 				log.Default().Println(err)
 				continue
@@ -547,7 +550,7 @@ func StartChat(api ClientAPI, store ClientStore, me crypto.IdentityPub, myPriv c
 			}
 			switch v := msg.Payload.Variant.(type) {
 			case *server.MessagePayload:
-				plaintext, err := key.Decrypt(v.Data, additional)
+				plaintext, err := ratchet.Decrypt(v.Data, additional)
 				if err != nil {
 					log.Default().Println(err)
 					continue
