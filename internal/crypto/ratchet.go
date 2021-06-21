@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"errors"
 	"io"
 
 	"golang.org/x/crypto/hkdf"
@@ -127,7 +128,9 @@ func DoubleRatchetFromReceiver(secret SharedSecret, pub ExchangePub, priv Exchan
 
 // Encrypt uses the current state of the ratchet to encrypt a piece of data.
 func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, error) {
-	return plaintext, nil
+	ciphertext := ratchet.sendingPub[:]
+	ciphertext = append(ciphertext, plaintext...)
+	return ciphertext, nil
 }
 
 // Decrypt uses the current state of the ratchet to decrypt a piece of data.
@@ -136,5 +139,10 @@ func (ratchet *DoubleRatchet) Encrypt(plaintext, additional []byte) ([]byte, err
 //
 // This will also advance the state of the ratchet accordingly.
 func (ratchet *DoubleRatchet) Decrypt(ciphertext, additional []byte) ([]byte, error) {
+	if len(ciphertext) < ExchangePubSize {
+		return nil, errors.New("ciphertext does not contain public key")
+	}
+	//attachedPub := ciphertext[:ExchangePubSize]
+	ciphertext = ciphertext[ExchangePubSize:]
 	return ciphertext, nil
 }
