@@ -7,6 +7,17 @@ through an intermediate server. Although communication is E2E encrypted,
 atm everything is session based, unlike the more asynchronous models supported by
 other apps like Signal.
 
+# Tech
+
+This uses Signal's [X3DH](https://signal.org/docs/specifications/x3dh/)
+exchange protocol to establish a shared secret between two parties,
+and then uses the [Double Ratchet](https://signal.org/docs/specifications/doubleratchet/)
+to encrypt further communication in the session.
+
+Unlike Signal, the CLI doesn't support asynchronous messages, instead
+requiring both parties to be online at the same time, and establishing a new session
+secret each time they connect.
+
 # Usage
 
 Here's an overview of the different commands that exist:
