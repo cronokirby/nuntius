@@ -41,6 +41,8 @@ type ClientStore interface {
 	SaveBundle(crypto.BundlePub, crypto.BundlePriv) error
 	// GetPreKey retrieves the private part of a prekey
 	GetPrekey(crypto.ExchangePub) (crypto.ExchangePriv, error)
+	// HasPreKey checks if a prekey exists at all
+	HasPrekey() (bool, error)
 	// BurnOneTime retrieves a one time key, also deleting it
 	BurnOnetime(crypto.ExchangePub) (crypto.ExchangePriv, error)
 }
@@ -187,6 +189,15 @@ func (store *clientDatabase) GetPrekey(prekey crypto.ExchangePub) (crypto.Exchan
 		return nil, err
 	}
 	return priv, nil
+}
+
+func (store *clientDatabase) HasPrekey() (bool, error) {
+	var count int
+	err := store.QueryRow("SELECT count(*) FROM prekey;").Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (store *clientDatabase) BurnOnetime(pub crypto.ExchangePub) (crypto.ExchangePriv, error) {

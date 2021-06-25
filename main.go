@@ -86,44 +86,6 @@ func (cmd *AddFriendCommand) Run(database string) error {
 	return store.AddFriend(pub, cmd.Name)
 }
 
-type RegisterCommand struct {
-	URL string `arg help:"The URL used to access this server"`
-}
-
-func (cmd *RegisterCommand) Run(database string) error {
-	store, err := client.NewStore(database)
-	if err != nil {
-		return fmt.Errorf("couldn't connect to database: %w", err)
-	}
-	pub, priv, err := store.GetFullIdentity()
-	if err != nil {
-		return err
-	}
-	if pub == nil {
-		fmt.Println("No identity found.")
-		fmt.Println("You can use `nuntius generate` to generate an identity.")
-		return nil
-	}
-	api := client.NewClientAPI(cmd.URL)
-	xPub, xPriv, err := client.RenewPrekey(api, pub, priv)
-	if err != nil {
-		return err
-	}
-	err = store.SavePrekey(xPub, xPriv)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("New Prekey registered:\n  %s\n", hex.EncodeToString(xPub))
-	newBundle, err := client.CreateNewBundleIfNecessary(api, store, pub, priv)
-	if err != nil {
-		return err
-	}
-	if newBundle {
-		fmt.Println("New bundle created.")
-	}
-	return nil
-}
-
 type ServerCommand struct {
 	Port int `arg help:"The port to use" default:"1234"`
 }
@@ -161,6 +123,21 @@ func (cmd *ChatCommand) Run(database string) error {
 	}
 
 	api := client.NewClientAPI(cmd.URL)
+	hasPrekey, err := store.HasPrekey()
+	if err != nil {
+		return err
+	}
+	if !hasPrekey {
+		xPub, xPriv, err := client.RenewPrekey(api, pub, priv)
+		if err != nil {
+			return err
+		}
+		err = store.SavePrekey(xPub, xPriv)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("New Prekey registered:\n  %s\n", hex.EncodeToString(xPub))
+	}
 	newBundle, err := client.CreateNewBundleIfNecessary(api, store, pub, priv)
 	if err != nil {
 		return err
@@ -193,7 +170,6 @@ var cli struct {
 	Generate  GenerateCommand  `cmd help:"Generate a new identity pair."`
 	Identity  IdentityCommand  `cmd help:"Fetch the current identity."`
 	AddFriend AddFriendCommand `cmd help:"Add a new friend"`
-	Register  RegisterCommand  `cmd help:"Register with a server"`
 	Server    ServerCommand    `cmd help:"Start a server."`
 	Chat      ChatCommand      `cmd help:"Chat with a friend."`
 }
